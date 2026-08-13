@@ -11,7 +11,7 @@ class ErrorBoundary extends Component<any, any> {
 }
 
 import { useWebRTC } from './useWebRTC';
-import { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, onValue, onDisconnect } from './firebase';
+import { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, ref, set, get, onValue, remove, onDisconnect } from './firebase';
 import ReactPlayer from 'react-player';
 import './App.css';
 
@@ -20,6 +20,17 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [chatInput, setChatInput] = useState('');
+  const typingTimeout = useRef<any>(null);
+
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatInput(e.target.value);
+    if (!typingTimeout.current) {
+      webrtc.sendTypingIndicator(username);
+      typingTimeout.current = setTimeout(() => {
+        typingTimeout.current = null;
+      }, 2000);
+    }
+  };
   
   const [loggedInEmail, setLoggedInEmail] = useState('');
   
@@ -123,9 +134,20 @@ export default function App() {
   };
   
   const webrtc = useWebRTC();
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      document.body.classList.add('is-native');
+    }
+  }, []);
+
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const reactPlayerRef = useRef<any>(null);
+  const hoverTimeout = useRef<any>(null);
+  
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>();
+  const workerRef = useRef<Worker | null>(null);
   const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
   const [ytPlaybackRate, setYtPlaybackRate] = useState<number>(1);
@@ -147,9 +169,18 @@ export default function App() {
       setIsPlaying(false);
       setCurrentScreen('watching');
     };
+    const handleHostLeft = () => {
+      // Host closed the room — send guest back to home
+      webrtc.leaveRoom();
+      setYoutubeUrl(null);
+      setCurrentScreen('home');
+      alert('The host has closed the room.');
+    };
     webrtc.socket.on('room:youtube', handleYouTubeUrl);
+    webrtc.socket.on('room:host_left', handleHostLeft);
     return () => {
       webrtc.socket?.off('room:youtube', handleYouTubeUrl);
+      webrtc.socket?.off('room:host_left', handleHostLeft);
     };
   }, [webrtc.socket]);
 
@@ -157,6 +188,8 @@ export default function App() {
   useEffect(() => {
     if (webrtc.remoteStream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = webrtc.remoteStream;
+      remoteVideoRef.current.muted = false;
+      remoteVideoRef.current.volume = 1;
       remoteVideoRef.current.play().catch(() => {
         // Autoplay blocked — user will need to tap play
       });
@@ -170,7 +203,6 @@ export default function App() {
 
   const [showControls, setShowControls] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  const hoverTimeout = useRef<any>(null);
 
   const formatTime = (time: number) => {
     if (isNaN(time)) return "0:00";
@@ -185,10 +217,11 @@ export default function App() {
   const handleTimeUpdate = (e: any) => {
     if (webrtc.isHost) {
       const newTime = e.target.currentTime;
+      const dur = e.target.duration;
       setCurrentTime(newTime);
       const now = Date.now();
       if (now - lastSyncRef.current > 1000) {
-        webrtc.sendPlaybackCommand({ action: 'sync', time: newTime, duration: duration || e.target.duration });
+        webrtc.sendPlaybackCommand({ action: 'sync', time: newTime, duration: dur || duration });
         lastSyncRef.current = now;
       }
     }
@@ -243,16 +276,94 @@ export default function App() {
 
   const handleVideoLoaded = (e: any) => {
     const videoElem = e.target as HTMLVideoElement & { audioTracks?: any };
-    
     videoElem.play();
-    webrtc.setLocalStream(videoElem.captureStream());
     
-    // Check for audio tracks
+    // Stop any previous draw loop
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    // Terminate previous worker
+    if (workerRef.current) { workerRef.current.terminate(); workerRef.current = null; }
+
+    if (isScreenSharing) {
+      if (videoElem.audioTracks && videoElem.audioTracks.length > 0) {
+        const tracks = [];
+        for (let i = 0; i < videoElem.audioTracks.length; i++) tracks.push(videoElem.audioTracks[i]);
+        setAudioTracks(tracks);
+      } else {
+        setAudioTracks([]);
+      }
+      return;
+    }
+    
+    if (Capacitor.isNativePlatform() || !canvasRef.current) {
+      webrtc.setLocalStream((videoElem as any).captureStream());
+    } else {
+      const canvas = canvasRef.current;
+
+      // Step 1: get the stream BEFORE transferring control
+      const canvasStream = canvas.captureStream(0);
+      const videoTrack = canvasStream.getVideoTracks()[0] as any;
+
+      // Step 2: transfer canvas rendering to a Web Worker (completely off main thread)
+      let worker: Worker | null = null;
+      try {
+        const offscreen = canvas.transferControlToOffscreen();
+        worker = new Worker(new URL('./canvas.worker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = worker;
+        worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
+      } catch (err) {
+        // OffscreenCanvas not supported — fall back to main thread captureStream
+        webrtc.setLocalStream((videoElem as any).captureStream());
+        return;
+      }
+
+      const TARGET_FPS = 24;
+      const FRAME_INTERVAL = 1000 / TARGET_FPS;
+      let lastDrawTime = 0;
+
+      // Step 3: main thread only calls createImageBitmap (GPU-accelerated, non-blocking)
+      // and posts the bitmap to the worker — drawImage() never runs on the main thread!
+      const drawFrame = (timestamp: number) => {
+        if (timestamp - lastDrawTime >= FRAME_INTERVAL) {
+          if (videoElem.videoWidth && !videoElem.paused && workerRef.current) {
+            const MAX_WIDTH = 1920; // Full 1080p
+            let tw = videoElem.videoWidth;
+            let th = videoElem.videoHeight;
+            if (tw > MAX_WIDTH) {
+              const ratio = MAX_WIDTH / tw;
+              tw = MAX_WIDTH;
+              th = Math.floor(th * ratio);
+            }
+
+            // createImageBitmap is GPU-accelerated and runs async without blocking
+            createImageBitmap(videoElem, { resizeWidth: tw, resizeHeight: th, resizeQuality: 'medium' })
+              .then(bitmap => {
+                if (workerRef.current) {
+                  workerRef.current.postMessage({ type: 'frame', bitmap, width: tw, height: th }, [bitmap as any]);
+                  if (videoTrack?.requestFrame) videoTrack.requestFrame();
+                } else {
+                  bitmap.close();
+                }
+              })
+              .catch(() => {});
+          }
+          lastDrawTime = timestamp;
+        }
+        rafRef.current = requestAnimationFrame(drawFrame);
+      };
+      rafRef.current = requestAnimationFrame(drawFrame);
+
+      // Attach audio track from native stream
+      const nativeStream = (videoElem as any).captureStream();
+      const audioTracks = nativeStream.getAudioTracks();
+      if (audioTracks.length > 0) canvasStream.addTrack(audioTracks[0]);
+      
+      webrtc.setLocalStream(canvasStream);
+    }
+    
+    // Collect audio tracks for the track selector UI
     if (videoElem.audioTracks && videoElem.audioTracks.length > 0) {
       const tracks = [];
-      for (let i = 0; i < videoElem.audioTracks.length; i++) {
-        tracks.push(videoElem.audioTracks[i]);
-      }
+      for (let i = 0; i < videoElem.audioTracks.length; i++) tracks.push(videoElem.audioTracks[i]);
       setAudioTracks(tracks);
     } else {
       setAudioTracks([]);
@@ -291,7 +402,7 @@ export default function App() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const [useNativeControls, setUseNativeControls] = useState(Capacitor.isNativePlatform());
+  const [useNativeControls, setUseNativeControls] = useState(false);
   const [audioTracks, setAudioTracks] = useState<any[]>([]);
   const [showTrackMenu, setShowTrackMenu] = useState(false);
 
@@ -316,6 +427,31 @@ export default function App() {
       });
     }
   }, [uid, username, avatar, watchHistory, friendsList, appSettings]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const invitesRef = ref(db, `users/${uid}/invites`);
+    const unsub = onValue(invitesRef, (snap) => {
+      if (snap.exists()) {
+        const invites = snap.val();
+        for (const [sender, invite] of Object.entries(invites) as any) {
+           if (invite.time > Date.now() - 60000) {
+              const wantsToJoin = window.confirm(`${sender} invited you to join their Watch Party! Join now?`);
+              if (wantsToJoin) {
+                 setJoinCode(invite.code);
+                 webrtc.joinRoom(invite.code, username);
+                 setCurrentScreen('watching');
+              }
+              remove(ref(db, `users/${uid}/invites/${sender}`));
+              break;
+           } else {
+              remove(ref(db, `users/${uid}/invites/${sender}`));
+           }
+        }
+      }
+    });
+    return () => unsub();
+  }, [uid, username]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -343,10 +479,21 @@ export default function App() {
     }
   };
 
-  const handleAddFriend = () => {
-    if (newFriendName.trim() && !friendsList.includes(newFriendName.trim())) {
-      setFriendsList([...friendsList, newFriendName.trim()]);
-      setNewFriendName('');
+  const handleAddFriend = async () => {
+    const friendName = newFriendName.trim();
+    if (!friendName || friendsList.includes(friendName) || friendName === username) return;
+    
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      const userExists = Object.values(data).some((u: any) => u.username === friendName);
+      if (userExists) {
+        setFriendsList([...friendsList, friendName]);
+        setNewFriendName('');
+      } else {
+        alert("User not found!");
+      }
     }
   };
 
@@ -396,7 +543,12 @@ export default function App() {
       }
       
       // Handle playback sync
-      if (youtubeUrl) {
+      if (cmd.action === 'reaction') {
+        const id = reactionIdCounter.current++;
+        const left = 30 + Math.random() * 40;
+        setFloatingReactions(prev => [...prev, { id, emoji: cmd.emoji, left }]);
+        setTimeout(() => setFloatingReactions(prev => prev.filter(r => r.id !== id)), 1650);
+      } else if (youtubeUrl) {
         if (cmd.action === 'play') {
           setIsPlaying(true);
           reactPlayerRef.current?.play();
@@ -418,11 +570,22 @@ export default function App() {
             setIsPlaying(false);
           } else if (cmd.action === 'seek') {
             video.currentTime = cmd.time;
+          } else if (cmd.action === 'sync') {
+            if (!webrtc.isHost) {
+              if (Math.abs(video.currentTime - cmd.time) > 2) {
+                video.currentTime = cmd.time;
+              }
+              setCurrentTime(cmd.time);
+              if (cmd.duration) setDuration(cmd.duration);
+              if (isPlaying) {
+                video.play().catch(() => {});
+              }
+            }
           }
         }
       }
     }
-  }, [webrtc.playbackCommand, youtubeUrl]);
+  }, [webrtc.playbackCommand, youtubeUrl, isPlaying]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -496,12 +659,11 @@ export default function App() {
   const handleReaction = (e: any, emoji: string) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Clicked reaction:", emoji);
+    webrtc.sendPlaybackCommand({ action: 'reaction', emoji });
     const id = reactionIdCounter.current++;
     const left = 30 + Math.random() * 40;
     setFloatingReactions(prev => {
       const next = [...prev, { id, emoji, left }];
-      console.log("New state:", next);
       return next;
     });
     setTimeout(() => {
@@ -528,6 +690,8 @@ export default function App() {
     const startOptimization = async (filePath: string, fileName: string, trackIndex?: number) => {
       setIsOptimizing(true);
       setOptimizeProgress(0);
+      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      setIsScreenSharing(false);
       try {
         const optimizedPath = await (window as any).ipcRenderer.optimizeAudio(filePath, trackIndex);
         setLocalVideoUrl(`watchparty://local/${optimizedPath.replace(/\\/g, '/')}`);
@@ -583,10 +747,10 @@ export default function App() {
         }, 100);
 
         stream.getVideoTracks()[0].onended = () => {
-          // Handle screen share stop
-          setCurrentScreen('dashboard');
+          // Handle screen share stop — clean up everything properly
           setIsScreenSharing(false);
-          webrtc.socket?.emit('room:leave');
+          webrtc.leaveRoom();
+          setCurrentScreen('home');
         };
       } catch (err) {
         console.error("Failed to share screen", err);
@@ -647,6 +811,8 @@ export default function App() {
               startOptimization(filePath, fileName);
             }
           } else {
+            if (localVideoRef.current) localVideoRef.current.srcObject = null;
+            setIsScreenSharing(false);
             setLocalVideoUrl(`watchparty://local/${filePath.replace(/\\/g, '/')}`);
             const dummyFile = new File([""], fileName, { type: "video/mp4" });
             webrtc.hostRoom(username, dummyFile);
@@ -677,10 +843,11 @@ export default function App() {
       }
     };
 
-  const startJoin = () => {
-    if (joinCode) {
-      webrtc.joinRoom(joinCode, username);
-      setCurrentScreen('watching');
+  const startJoin = (codeToJoin?: string) => {
+    const code = codeToJoin || joinCode;
+    if (code) {
+      setCurrentScreen('watching'); // Navigate first so video element mounts before stream arrives
+      webrtc.joinRoom(code, username);
     }
   };
 
@@ -780,6 +947,7 @@ export default function App() {
         )}
 
         <div className="window-body">
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
           {currentScreen !== 'login' && (
             <aside className="sidebar">
               <div className="sb-profile">
@@ -877,9 +1045,9 @@ export default function App() {
                     <div className="login-divider"><div></div><span>or</span><div></div></div>
                     <div className="login-field">
                       <label>Join Code</label>
-                      <input type="text" placeholder="e.g. ABC-123" value={joinCode} onChange={e => setJoinCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && startJoin()} />
+                      <input type="text" placeholder="e.g. ABC-123" value={joinCode} onChange={e => setJoinCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && startJoin(joinCode)} />
                     </div>
-                    <button className="login-ghost" onClick={startJoin}>🔗 Join directly with link</button>
+                    <button className="login-ghost" onClick={() => startJoin(joinCode)}>🔗 Join directly with link</button>
                   </div>
                 </div>
               </div>
@@ -924,7 +1092,7 @@ export default function App() {
                       message: 'Enter join code:',
                       onSubmit: (code) => {
                         setPromptConfig(null);
-                        if (code) { setJoinCode(code); startJoin(); }
+                        if (code) { setJoinCode(code); startJoin(code); }
                       },
                       onCancel: () => setPromptConfig(null)
                     });
@@ -972,11 +1140,33 @@ export default function App() {
                     </div>
                   ) : (
                     friendsList.map(friend => (
-                      <div key={friend} className="friend-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'var(--surface-2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div className="sb-avatar" style={{ width: '40px', height: '40px', fontSize: '18px' }}>{friend.charAt(0).toUpperCase()}</div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--cream)', marginBottom: '4px' }}>{friend}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--muted-dim)' }}>Offline</div>
+                      <div key={friend} className="friend-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--surface-2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div className="sb-avatar" style={{ width: '40px', height: '40px', fontSize: '18px' }}>{friend.charAt(0).toUpperCase()}</div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--cream)', marginBottom: '4px' }}>{friend}</div>
+                            <div style={{ fontSize: '12px', color: friendStatuses[friend] === 'online' ? '#4CAF50' : 'var(--muted-dim)' }}>{friendStatuses[friend] === 'online' ? 'Online' : 'Offline'}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                           {friendStatuses[friend] === 'online' && webrtc.roomCode && (
+                              <button onClick={async () => {
+                                const code = webrtc.roomCode;
+                                if (code) {
+                                  const usersRef = ref(db, 'users');
+                                  const snap = await get(usersRef);
+                                  if (snap.exists()) {
+                                    const data = snap.val();
+                                    const userEntry = Object.entries(data).find(([k, u]: any) => u.username === friend);
+                                    if (userEntry) {
+                                      set(ref(db, `users/${userEntry[0]}/invites/${username}`), { code, time: Date.now() });
+                                      alert(`Invited ${friend}!`);
+                                    }
+                                  }
+                                }
+                              }} style={{padding: '6px 12px', background: 'var(--primary)', color: 'white', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', border: 'none'}}>Invite</button>
+                           )}
+                           <button onClick={() => setFriendsList(friendsList.filter(x => x !== friend))} style={{padding: '6px 12px', background: 'rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', border: 'none'}}>Remove</button>
                         </div>
                       </div>
                     ))
@@ -1106,10 +1296,24 @@ export default function App() {
             </section>
 
             <section className={`view watch-view ${currentScreen === 'watching' ? 'active' : ''}`} style={{display: currentScreen === 'watching' ? 'flex' : 'none'}}>
-              <div className="watch-video-col">
+              <div className={`watch-video-col ${isChatHidden ? 'chat-hidden' : ''}`}>
                 <div className="watch-topbar">
-                  <button className="back-btn" onClick={() => { setYoutubeUrl(null); setCurrentScreen('home'); }}>←</button>
-                  <div className="watch-title"><div className="who">{webrtc.isHost ? 'Your movie night' : 'Watching'}</div><div className="sub" style={{cursor: 'pointer', userSelect: 'all'}} title="Click to copy" onClick={() => { const code = stableRoomCode || joinCode; if (code) navigator.clipboard?.writeText(code); }}>Code: {stableRoomCode || joinCode || '…'}</div></div>
+                  <button className="back-btn" onClick={() => { webrtc.leaveRoom(); setYoutubeUrl(null); setCurrentScreen('home'); }}>←</button>
+                  <div className="watch-title"><div className="who">{webrtc.isHost ? 'Your movie night' : 'Watching'}</div><div className="sub" style={{cursor: 'pointer', userSelect: 'all'}} title="Click to copy" onClick={() => { const code = webrtc.roomCode || joinCode; if (code) navigator.clipboard?.writeText(code); }}>Code: {webrtc.roomCode || joinCode || '…'}</div></div>
+                  
+                  <div style={{display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '16px'}}>
+                    <button style={{padding: '6px 12px', background: 'var(--surface-2)', borderRadius: '8px', color: 'var(--cream)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer'}} onClick={() => {
+                      const code = webrtc.roomCode || joinCode;
+                      if (code) {
+                        navigator.clipboard?.writeText(`Join my Watch Party! Code: ${code}`);
+                        alert("Invite copied to clipboard!");
+                      }
+                    }}>Share Invite</button>
+                    {webrtc.isHost && (
+                      <button style={{padding: '6px 12px', background: 'rgba(232,17,35,0.2)', color: '#ff4d4d', borderRadius: '8px', border: '1px solid rgba(232,17,35,0.4)', cursor: 'pointer'}} onClick={() => { webrtc.leaveRoom(); setYoutubeUrl(null); setCurrentScreen('home'); }}>Close Room</button>
+                    )}
+                  </div>
+
                   <button className="theater-toggle" onClick={() => setIsChatHidden(!isChatHidden)}>{isChatHidden ? '💬 Show chat' : '💬 Hide chat'}</button>
                 </div>
                 <div ref={playerRef} className={`video-area ${showControls ? 'show-controls' : ''}`} onMouseMove={handleMouseMove} onMouseLeave={() => { clearTimeout(hoverTimeout.current); setShowControls(false); }} onDoubleClick={handleDoubleTap}>
@@ -1147,6 +1351,7 @@ export default function App() {
                     <video 
                       ref={webrtc.isHost ? localVideoRef : remoteVideoRef}
                       src={webrtc.isHost ? localVideoUrl! : undefined}
+                      crossOrigin="anonymous"
                       onTimeUpdate={handleTimeUpdate}
                       onLoadedMetadata={handleLoadedMetadata}
                       onLoadedData={webrtc.isHost ? handleVideoLoaded : undefined}
@@ -1180,8 +1385,8 @@ export default function App() {
                         <span key={r.id} className="floating-reaction" style={{left: `${r.left}%`}}>{r.emoji}</span>
                       ))}
                       {toastMessage && (
-                        <div className="toast">
-                          <span style={{fontWeight: 600}}>{toastMessage.senderName}</span>: {toastMessage.text}
+                        <div className="chat-toast">
+                          <span className="toast-sender">{toastMessage.senderName}</span>: {toastMessage.text}
                         </div>
                       )}
                       {isFullscreen && !isChatHidden && (
@@ -1196,23 +1401,31 @@ export default function App() {
                                 </div>
                               );
                             })}
+                            {webrtc.typingUsers && webrtc.typingUsers.size > 0 && (
+                              <div className="typing-indicator" style={{ marginTop: '4px', alignSelf: 'flex-start' }}>
+                                <span style={{fontSize: '11px', color: 'var(--muted)', marginRight: '6px'}}>{Array.from(webrtc.typingUsers).join(', ')} is typing</span>
+                                <div className="typing-dot"></div><div className="typing-dot"></div><div className="typing-dot"></div>
+                              </div>
+                            )}
                           </div>
                           <div className="chat-input-row" style={{background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
-                            <input className="chat-input" type="text" placeholder="Say something…" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+                            <input className="chat-input" type="text" placeholder="Say something…" value={chatInput} onChange={handleChatInputChange} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
                             <button className="send-btn" onClick={sendMessage}>➤</button>
                           </div>
                         </div>
                       )}
-                      <button className="center-play" onClick={togglePlay}>{isPlaying ? '❚❚' : '▶'}</button>
+                      {!isScreenSharing && <button className="center-play" onClick={togglePlay}>{isPlaying ? '❚❚' : '▶'}</button>}
                       <div className="video-controls" onDoubleClick={(e) => e.stopPropagation()}>
-                        <div className="scrub-track" onClick={handleScrub}>
-                          <div className="scrub-fill" style={{width: `${duration ? (currentTime / duration) * 100 : 0}%`}}></div>
-                          <div className="scrub-thumb" style={{left: `${duration ? (currentTime / duration) * 100 : 0}%`}}></div>
-                        </div>
-                        <div className="time-row">
-                          <span className="mono">{formatTime(currentTime)}</span>
+                        {!isScreenSharing && (
+                          <div className="scrub-track" onClick={handleScrub}>
+                            <div className="scrub-fill" style={{width: `${duration ? (currentTime / duration) * 100 : 0}%`}}></div>
+                            <div className="scrub-thumb" style={{left: `${duration ? (currentTime / duration) * 100 : 0}%`}}></div>
+                          </div>
+                        )}
+                        <div className="time-row" style={isScreenSharing ? { justifyContent: 'flex-end' } : {}}>
+                          {!isScreenSharing && <span className="mono">{formatTime(currentTime)}</span>}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span className="mono">{formatTime(duration)}</span>
+                            {!isScreenSharing && <span className="mono">{formatTime(duration)}</span>}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onDoubleClick={(e) => e.stopPropagation()}>
                               <button style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 0, display: 'flex' }} onClick={toggleMute} title="Toggle Mute">
                                 {isMuted || volume === 0 ? (
@@ -1331,9 +1544,15 @@ export default function App() {
                         </div>
                       );
                     })}
+                    {webrtc.typingUsers && webrtc.typingUsers.size > 0 && (
+                      <div className="typing-indicator" style={{ marginTop: '4px', alignSelf: 'flex-start' }}>
+                        <span style={{fontSize: '11px', color: 'var(--muted)', marginRight: '6px'}}>{Array.from(webrtc.typingUsers).join(', ')} is typing</span>
+                        <div className="typing-dot"></div><div className="typing-dot"></div><div className="typing-dot"></div>
+                      </div>
+                    )}
                   </div>
                   <div className="chat-input-row">
-                    <input className="chat-input" type="text" placeholder="Say something…" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
+                    <input className="chat-input" type="text" placeholder="Say something…" value={chatInput} onChange={handleChatInputChange} onKeyDown={e => e.key === 'Enter' && sendMessage()} />
                     <button className="send-btn" onClick={sendMessage}>➤</button>
                   </div>
                 </div>

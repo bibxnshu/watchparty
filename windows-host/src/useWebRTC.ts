@@ -2,9 +2,26 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Capacitor } from '@capacitor/core';
 
+// STUN + free TURN servers for reliable NAT traversal in any network environment
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 
@@ -32,19 +49,29 @@ export function useWebRTC() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const targetIdRef = useRef<string | null>(null);
   const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const typingTimers = useRef<Map<string, any>>(new Map());
+  const peerStateRef = useRef<RTCPeerConnectionState>('new'); // ref for use in closures
+  const negotiatingRef = useRef(false); // prevent offer storms
 
   const stateRef = useRef({ roomCode, isHost, participants });
   useEffect(() => {
     stateRef.current = { roomCode, isHost, participants };
   }, [roomCode, isHost, participants]);
 
+  useEffect(() => {
+    peerStateRef.current = peerState;
+  }, [peerState]);
+
   // Initialize Socket
   useEffect(() => {
     const isDesktop = typeof window !== 'undefined' && !!(window as any).ipcRenderer;
-    const serverUrl = isDesktop 
-      ? 'http://localhost:4000' 
-      : 'http://192.168.1.5:4000';
-    const s = io(serverUrl);
+    const serverUrl = 'https://watchparty-owib.onrender.com';
+    const s = io(serverUrl, {
+      transports: ['websocket'], // skip long-polling for faster initial connect
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
     setSocket(s);
 
     s.on('connect', () => {
@@ -81,8 +108,37 @@ export function useWebRTC() {
       }
     };
 
+    // Apply bitrate cap when connected to prevent encoder from choking
     pc.onconnectionstatechange = () => {
       setPeerState(pc.connectionState);
+      peerStateRef.current = pc.connectionState;
+      if (pc.connectionState === 'connected') {
+        negotiatingRef.current = false;
+        pc.getSenders().forEach(sender => {
+          if (sender.track?.kind === 'video') {
+            const params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+            params.encodings[0].maxBitrate = 2_500_000; // 2.5 Mbps
+            params.encodings[0].maxFramerate = 24;
+            sender.setParameters(params).catch(() => {});
+          }
+        });
+      }
+    };
+
+    // Debounced renegotiation — prevents simultaneous offer/answer storms
+    pc.onnegotiationneeded = async () => {
+      if (!stateRef.current.isHost || pc.signalingState === 'closed' || negotiatingRef.current) return;
+      negotiatingRef.current = true;
+      try {
+        const offer = await pc.createOffer();
+        if (pc.signalingState !== 'stable') { negotiatingRef.current = false; return; }
+        await pc.setLocalDescription(offer);
+        s.emit('webrtc:offer', { targetId, sdp: offer });
+      } catch (e) {
+        console.error('Renegotiation error:', e);
+        negotiatingRef.current = false;
+      }
     };
 
     pc.ontrack = (event) => {
@@ -98,11 +154,28 @@ export function useWebRTC() {
       };
     };
 
-    if (localStreamRef.current) {
+    if (localStreamRef.current && typeof (localStreamRef.current as any).getTracks === 'function') {
       localStreamRef.current.getTracks().forEach(track => {
         pc.addTrack(track, localStreamRef.current!);
       });
     }
+
+    // Apply encoding constraints after connection is established
+    pc.addEventListener('connectionstatechange', () => {
+      if (pc.connectionState === 'connected') {
+        pc.getSenders().forEach(sender => {
+          if (sender.track?.kind === 'video') {
+            const params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            params.encodings[0].maxBitrate = 2_500_000; // 2.5 Mbps — smooth 1080p24
+            params.encodings[0].maxFramerate = 24;
+            sender.setParameters(params).catch(() => {});
+          }
+        });
+      }
+    });
 
     return pc;
   }, []);
@@ -113,41 +186,53 @@ export function useWebRTC() {
 
     socket.on('room:participants', (parts) => {
       setParticipants(parts);
-      // Simple logic for 1-on-1: if we are host and someone joins, we initiate the call
-      if (isHost && parts.length > 1) {
+      if (stateRef.current.isHost && parts.length > 1) {
         const guest = parts.find((p: any) => !p.isHost);
-        if (guest && pcRef.current?.connectionState !== 'connected') {
+        // Only initiate if not already connected or connecting
+        if (guest && peerStateRef.current !== 'connected' && peerStateRef.current !== 'connecting') {
           initiateCall(guest.id);
         }
       }
     });
 
     socket.on('webrtc:offer', async ({ senderId, sdp }) => {
-      const pc = createPeerConnection(socket, senderId);
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      for (const candidate of iceCandidatesQueue.current) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      let pc = pcRef.current;
+      if (!pc || pc.signalingState === 'closed') {
+        pc = createPeerConnection(socket, senderId);
       }
-      iceCandidatesQueue.current = [];
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('webrtc:answer', { targetId: senderId, sdp: answer });
-    });
-
-    socket.on('webrtc:answer', async ({ senderId, sdp }) => {
-      if (pcRef.current) {
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
         for (const candidate of iceCandidatesQueue.current) {
-          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
         }
         iceCandidatesQueue.current = [];
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc:answer', { targetId: senderId, sdp: answer });
+      } catch (e) {
+        console.error('Error handling offer:', e);
       }
     });
 
-    socket.on('webrtc:ice-candidate', async ({ senderId, candidate }) => {
+    socket.on('webrtc:answer', async ({ sdp }) => {
+      if (pcRef.current && pcRef.current.signalingState === 'have-local-offer') {
+        try {
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
+          for (const candidate of iceCandidatesQueue.current) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+          iceCandidatesQueue.current = [];
+          negotiatingRef.current = false;
+        } catch (e) {
+          console.error('Error setting answer:', e);
+        }
+      }
+    });
+
+    socket.on('webrtc:ice-candidate', async ({ candidate }) => {
       if (pcRef.current) {
         if (pcRef.current.remoteDescription) {
-          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
         } else {
           iceCandidatesQueue.current.push(candidate);
         }
@@ -166,41 +251,60 @@ export function useWebRTC() {
        });
     });
 
+    socket.on('chat:typing', ({ senderName }) => {
+      setTypingUsers(prev => new Set(prev).add(senderName));
+      if (typingTimers.current.has(senderName)) clearTimeout(typingTimers.current.get(senderName));
+      typingTimers.current.set(senderName, setTimeout(() => {
+        setTypingUsers(prev => {
+          const next = new Set(prev);
+          next.delete(senderName);
+          return next;
+        });
+      }, 3000));
+    });
+
     return () => {
       socket.off('room:participants');
       socket.off('webrtc:offer');
       socket.off('webrtc:answer');
       socket.off('webrtc:ice-candidate');
       socket.off('chat:message');
+      socket.off('chat:typing');
       socket.off('playback:command');
     };
-  }, [socket, isHost, createPeerConnection]);
+  }, [socket, createPeerConnection]);
 
   const initiateCall = async (targetId: string) => {
     if (!socket) return;
     const pc = createPeerConnection(socket, targetId);
-    
-    // Create data channel as caller
     const dc = pc.createDataChannel('chat');
     dataChannelRef.current = dc;
     dc.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       setChatMessages(prev => [...prev, msg]);
     };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('webrtc:offer', { targetId, sdp: offer });
+    try {
+      negotiatingRef.current = true;
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('webrtc:offer', { targetId, sdp: offer });
+    } catch (e) {
+      console.error('Error creating offer:', e);
+      negotiatingRef.current = false;
+    }
   };
 
   const setLocalStream = (stream: MediaStream) => {
     localStreamRef.current = stream;
-    if (pcRef.current && peerState === 'connected') {
+    // Use peerStateRef (not state) to avoid stale closure bugs
+    if (pcRef.current && peerStateRef.current === 'connected') {
       stream.getTracks().forEach(track => {
-        // Just a simple replace for MVP
         const sender = pcRef.current?.getSenders().find(s => s.track?.kind === track.kind);
-        if (sender) sender.replaceTrack(track);
-        else pcRef.current?.addTrack(track, stream);
+        if (sender) {
+          sender.replaceTrack(track).catch(() => {});
+        } else {
+          pcRef.current?.addTrack(track, stream);
+        }
       });
     }
   };
@@ -228,8 +332,25 @@ export function useWebRTC() {
     });
   };
 
+  const leaveRoom = () => {
+    if (socket) socket.emit('room:leave');
+    if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    setRoomCode(null);
+    setParticipants([]);
+    setRemoteStream(null);
+    setChatMessages([]);
+    setIsHost(false);
+    setPeerState('new');
+    peerStateRef.current = 'new';
+    negotiatingRef.current = false;
+  };
+
   const sendPlaybackCommand = (cmd: any) => {
-    if (socket && roomCode) {
+    if (socket && stateRef.current.roomCode) {
       socket.emit('playback:command', cmd);
     }
   };
@@ -252,7 +373,14 @@ export function useWebRTC() {
     }
   };
 
+  const sendTypingIndicator = (senderName: string) => {
+    if (socket && roomCode) {
+      socket.emit('chat:typing', { senderName });
+    }
+  };
+
   return {
+    socket,
     isConnected,
     roomCode,
     isHost,
@@ -260,9 +388,12 @@ export function useWebRTC() {
     peerState,
     remoteStream,
     chatMessages,
+    typingUsers,
     hostRoom,
     joinRoom,
+    leaveRoom,
     sendChatMessage,
+    sendTypingIndicator,
     setLocalStream,
     playbackCommand,
     sendPlaybackCommand,

@@ -101,6 +101,19 @@ io.on('connection', (socket) => {
     socket.to(targetId).emit('webrtc:ice-candidate', { senderId: socket.id, candidate });
   });
 
+  // ── room:leave (explicit, e.g. host closes room) ──────────────────────────
+  socket.on('room:leave', () => {
+    const result = leaveRoom(socket.id);
+    if (!result) return;
+    const { code, room } = result;
+    socket.leave(code);
+    if (room.participants.size > 0) {
+      io.to(code).emit('room:participants', getParticipantsList(room));
+      // Tell remaining guests the host left
+      io.to(code).emit('room:host_left');
+    }
+  });
+
   // ── disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[disconnect] ${socket.id}`);

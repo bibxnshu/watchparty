@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getDatabase, ref, set, onValue, push, remove, onDisconnect } from 'firebase/database'
+import { getDatabase, ref, set, onValue, push, remove, onDisconnect, get } from 'firebase/database'
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 
 // Your web app's Firebase configuration
@@ -23,4 +23,4 @@ export const db = getDatabase(app)
 // Initialize Auth
 export const auth = getAuth(app)
 
-export { ref, set, onValue, push, remove, onDisconnect, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+export { ref, set, onValue, push, remove, onDisconnect, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, get }

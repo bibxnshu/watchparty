@@ -23,4 +23,9 @@ export default defineConfig({
     ]),
     renderer(),
   ],
+  server: {
+    watch: {
+      ignored: ['**/android/**', '**/dist/**']
+    }
+  }
 })

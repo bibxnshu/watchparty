@@ -98,6 +98,9 @@ app.whenReady().then(() => {
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize.toString(),
           'Content-Type': 'video/mp4',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache'
         },
       });
     } else {
@@ -118,6 +121,9 @@ app.whenReady().then(() => {
         headers: {
           'Content-Length': totalSize.toString(),
           'Content-Type': 'video/mp4',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache'
         }
       });
     }

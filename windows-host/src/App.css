@@ -612,9 +612,13 @@ option {
 }
 
 /* Capacitor Mobile Overrides */
+body.is-native { padding: 0 !important; align-items: stretch !important; }
+body.is-native .app-window { width: 100% !important; height: 100% !important; border-radius: 0 !important; max-width: none !important; max-height: none !important; box-shadow: none !important; }
+
 @media (max-width: 768px) {
   .watch-view { flex-direction: column !important; }
   .watch-video-col { flex: 1 1 auto; max-height: 40vh; min-height: 250px; }
+  .watch-video-col.chat-hidden { max-height: none; height: 100%; }
   .chat-panel { width: 100% !important; flex: 1 1 auto; border-left: none; border-top: 1px solid var(--divider); }
   .chat-panel.hidden { height: 0 !important; width: 100% !important; flex: none; border-top: none; }
   
@@ -641,6 +645,4 @@ option {
   .center-play { width: 56px !important; height: 56px !important; }
   
   #root { width: 100%; height: 100%; display: flex; }
-  body { padding: 0 !important; align-items: stretch !important; justify-content: center !important; }
-  .app-window { width: 100% !important; height: 100% !important; border-radius: 0 !important; max-width: none !important; max-height: none !important; box-shadow: none !important; }
 }
