@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hearth — a private cinema for two</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#130F0C;
+    --surface:#1C1611;
+    --surface-2:#241C15;
+    --surface-3:#2E2318;
+    --ember:#E8793E;
+    --ember-bright:#FFA35C;
+    --ember-deep:#B85A28;
+    --gold:#D4AF6A;
+    --cream:#F5ECE1;
+    --muted:#9C8D7E;
+    --muted-dim:#6E6255;
+    --online:#8FD9A8;
+    --divider:rgba(245,236,225,0.08);
+    --shadow-ember: 0 0 24px rgba(232,121,62,0.45);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:var(--bg);
+    font-family:'Manrope', sans-serif;
+    color:var(--cream);
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; border:none; background:none; color:inherit; cursor:pointer; }
+  button:focus-visible, input:focus-visible, .friend-row:focus-visible, a:focus-visible{
+    outline:2px solid var(--ember-bright); outline-offset:2px;
+  }
+  ::-webkit-scrollbar{ width:0; height:0; }
+
+  /* reveal-on-scroll */
+  .reveal{ opacity:0; transform:translateY(18px); transition:opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001s !important; animation-iteration-count:1 !important; transition-duration:0.001s !important; }
+  }
+
+  /* ============ LANDING NAV ============ */
+  .lp-nav{
+    position:fixed; top:0; left:0; right:0; z-index:200;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 40px;
+    background:rgba(19,15,12,0.7);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--divider);
+  }
+  .lp-brand{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:16px; }
+  .lp-brand-mark{
+    width:26px; height:26px; border-radius:8px;
+    background:radial-gradient(circle at 35% 30%, var(--ember-bright), var(--ember-deep));
+    box-shadow:var(--shadow-ember);
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+  }
+  .lp-links{ display:flex; gap:30px; font-size:13.5px; color:var(--muted); }
+  .lp-links a:hover{ color:var(--cream); }
+  .lp-nav-cta{
+    padding:9px 18px; border-radius:999px;
+    background:var(--ember); color:#1a1108;
+    font-weight:700; font-size:13px;
+    box-shadow:var(--shadow-ember);
+    transition:transform 0.15s ease;
+  }
+  .lp-nav-cta:hover{ transform:translateY(-1px); }
+  @media (max-width:760px){ .lp-links{ display:none; } }
+
+  /* ============ HERO ============ */
+  .lp-hero{
+    position:relative;
+    padding:170px 40px 110px;
+    overflow:hidden;
+    background:radial-gradient(circle at 80% 10%, #2c2015 0%, transparent 55%);
+  }
+  .lp-hero-inner{
+    max-width:1120px; margin:0 auto;
+    display:flex; align-items:center; gap:64px;
+  }
+  .lp-hero-text{ flex:1; min-width:0; }
+  .lp-eyebrow{
+    font-size:12px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--ember-bright); font-weight:700; margin-bottom:16px;
+  }
+  .lp-hero h1{
+    font-size:clamp(32px,5vw,52px);
+    line-height:1.08; font-weight:800; letter-spacing:-0.01em;
+    margin-bottom:20px;
+  }
+  .lp-hero h1 em{ color:var(--ember-bright); font-style:normal; }
+  .lp-hero p{ font-size:16px; color:var(--muted); line-height:1.6; max-width:440px; margin-bottom:30px; }
+  .lp-hero-ctas{ display:flex; gap:12px; flex-wrap:wrap; }
+  .lp-btn-primary{
+    padding:14px 24px; border-radius:14px;
+    background:linear-gradient(135deg, var(--ember-bright), var(--ember-deep));
+    color:#1a1108; font-weight:800; font-size:14px;
+    box-shadow:var(--shadow-ember);
+    transition:transform 0.15s ease;
+  }
+  .lp-btn-primary:hover{ transform:translateY(-2px); }
+  .lp-btn-ghost{
+    padding:14px 24px; border-radius:14px;
+    border:1.5px solid var(--divider);
+    font-weight:700; font-size:14px; color:var(--cream);
+    transition:border-color 0.2s ease, transform 0.15s ease;
+  }
+  .lp-btn-ghost:hover{ border-color:rgba(245,236,225,0.35); transform:translateY(-2px); }
+
+  /* hero decorative phone */
+  .lp-hero-visual{ flex:none; position:relative; }
+  .hero-phone{
+    width:230px; height:470px;
+    border-radius:34px;
+    padding:9px;
+    background:linear-gradient(160deg,#332821,#0c0906);
+    box-shadow:0 40px 80px rgba(0,0,0,0.6);
+    transform:rotate(-6deg);
+  }
+  .hero-phone-screen{
+    width:100%; height:100%; border-radius:26px; overflow:hidden;
+    background:linear-gradient(180deg,#1c1611,#0e0b08);
+    position:relative;
+  }
+  .hp-bar{ display:flex; align-items:center; justify-content:space-between; padding:16px 14px 8px; }
+  .hp-dot{ width:44px; height:12px; border-radius:8px; background:rgba(245,236,225,0.15); }
+  .hp-avatar{ width:16px; height:16px; border-radius:50%; background:linear-gradient(135deg,#C77B4A,#7A4526); }
+  .hp-video{
+    margin:10px 12px; height:120px; border-radius:14px;
+    background:radial-gradient(circle at 30% 20%, #3a2a1f, transparent 55%), linear-gradient(160deg,#241b14,#0a0706);
+    position:relative;
+  }
+  .hp-video::before, .hp-video::after{
+    content:''; position:absolute; left:8px; right:8px; height:1px;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,0.5) 0 4px, transparent 4px 10px);
+  }
+  .hp-video::before{ top:6px; } .hp-video::after{ bottom:6px; }
+  .hp-play{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:30px; height:30px; border-radius:50%; background:rgba(232,121,62,0.85);
+    display:flex; align-items:center; justify-content:center; font-size:11px;
+    box-shadow:var(--shadow-ember);
+  }
+  .hp-chat{ margin:0 12px; display:flex; flex-direction:column; gap:7px; }
+  .hp-bubble{ height:16px; border-radius:9px; background:var(--surface-2); }
+  .hp-bubble.own{ background:linear-gradient(135deg, var(--ember), var(--ember-deep)); align-self:flex-end; }
+  .hp-b1{ width:70%; } .hp-b2{ width:50%; } .hp-b3{ width:60%; }
+  .hero-glow{
+    position:absolute; width:340px; height:340px; border-radius:50%;
+    background:radial-gradient(circle, rgba(232,121,62,0.25), transparent 70%);
+    top:50%; left:50%; transform:translate(-50%,-50%); z-index:-1; filter:blur(10px);
+  }
+
+  /* ============ FEATURES ============ */
+  .lp-section-head{ text-align:center; max-width:560px; margin:0 auto 46px; }
+  .lp-section-head .lp-eyebrow{ text-align:center; }
+  .lp-section-head h2{ font-size:clamp(24px,3.4vw,34px); font-weight:800; margin-bottom:12px; letter-spacing:-0.01em; }
+  .lp-section-head p{ color:var(--muted); font-size:15px; line-height:1.6; }
+
+  .lp-features{ padding:110px 40px; }
+  .lp-features-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:18px; max-width:1100px; margin:0 auto;
+  }
+  .lp-feature-card{
+    padding:26px 22px; border-radius:20px;
+    background:var(--surface);
+    border:1px solid var(--divider);
+    transition:transform 0.25s ease, border-color 0.25s ease;
+  }
+  .lp-feature-card:hover{ transform:translateY(-4px); border-color:rgba(232,121,62,0.35); }
+  .lp-feature-icon{
+    width:40px; height:40px; border-radius:12px;
+    background:rgba(232,121,62,0.14); color:var(--ember-bright);
+    display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:16px;
+  }
+  .lp-feature-card h3{ font-size:15.5px; font-weight:700; margin-bottom:8px; }
+  .lp-feature-card p{ font-size:13px; color:var(--muted); line-height:1.55; }
+
+  /* ============ HOW IT WORKS ============ */
+  .lp-how{ padding:60px 40px 120px; }
+  .lp-steps{
+    display:flex; gap:32px; max-width:1000px; margin:0 auto; flex-wrap:wrap; justify-content:center;
+  }
+  .lp-step{ flex:1; min-width:220px; max-width:280px; }
+  .lp-step-num{
+    font-family:'JetBrains Mono', monospace; font-size:13px; font-weight:600;
+    color:var(--ember-bright); border:1px solid rgba(232,121,62,0.4);
+    width:30px; height:30px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; margin-bottom:16px;
+  }
+  .lp-step h3{ font-size:15px; font-weight:700; margin-bottom:8px; }
+  .lp-step p{ font-size:13px; color:var(--muted); line-height:1.55; }
+
+  /* ============ DEMO SECTION ============ */
+  .lp-demo{
+    padding:90px 20px 150px;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    background:radial-gradient(circle at 50% 25%, #241a12 0%, transparent 60%);
+    position:relative;
+  }
+  .lp-demo-caption{ text-align:center; max-width:380px; margin-bottom:28px; }
+  .lp-demo-caption p{ font-size:13px; color:var(--muted); line-height:1.55; margin-top:6px; }
+  .lp-demo-caption b{ color:var(--cream); }
+
+  /* ============ FOOTER ============ */
+  .lp-footer{
+    padding:50px 40px; text-align:center;
+    border-top:1px solid var(--divider);
+  }
+  .lp-footer .lp-brand{ justify-content:center; margin-bottom:10px; }
+  .lp-footer p{ font-size:12.5px; color:var(--muted-dim); }
+
+  /* ============================================================
+     DEVICE / APP PROTOTYPE
+     ============================================================ */
+  .device{
+    padding:14px; border-radius:56px;
+    background:linear-gradient(160deg,#332821,#0c0906);
+    box-shadow:0 50px 90px rgba(0,0,0,0.65), inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .phone{
+    position:relative; width:376px; height:780px; max-width:88vw; max-height:82vh;
+    aspect-ratio:376/780; background:var(--bg); border-radius:42px; overflow:hidden;
+  }
+  .notch{
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    width:84px; height:20px; background:#000; border-radius:20px; z-index:90;
+  }
+  .screens{ position:absolute; inset:0; }
+  .screen{
+    position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg);
+  }
+  .screen.active{ display:flex; animation:screenFade 0.35s ease; }
+  @keyframes screenFade{ from{ opacity:0; } to{ opacity:1; } }
+
+  /* ---------- ember particles (reused) ---------- */
+  .ember-field{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:1; }
+  .ember-particle{
+    position:absolute; bottom:-10px; width:4px; height:4px; border-radius:50%;
+    background:var(--ember); box-shadow:0 0 8px 2px rgba(232,121,62,0.7);
+    opacity:0; animation:emberRise linear infinite;
+  }
+  @keyframes emberRise{
+    0%{ opacity:0; transform:translateY(0) translateX(0); }
+    10%{ opacity:0.8; } 80%{ opacity:0.5; }
+    100%{ opacity:0; transform:translateY(-560px) translateX(14px); }
+  }
+
+  /* ---------- LOGIN ---------- */
+  #login{ align-items:center; justify-content:center; padding:0 30px; position:relative; }
+  .login-mark{
+    width:64px; height:64px; border-radius:20px; margin:0 auto 18px;
+    background:radial-gradient(circle at 35% 30%, var(--ember-bright), var(--ember-deep));
+    display:flex; align-items:center; justify-content:center; font-size:28px;
+    box-shadow:var(--shadow-ember);
+    animation:markGlow 2.6s ease-in-out infinite;
+  }
+  @keyframes markGlow{
+    0%,100%{ box-shadow:0 0 24px rgba(232,121,62,0.45); }
+    50%{ box-shadow:0 0 40px rgba(232,121,62,0.75); }
+  }
+  .login-title{ text-align:center; font-size:20px; font-weight:800; margin-bottom:4px; }
+  .login-sub{ text-align:center; font-size:12.5px; color:var(--muted); margin-bottom:30px; }
+  .login-field{ margin-bottom:12px; }
+  .login-field label{ display:block; font-size:11px; color:var(--muted-dim); margin-bottom:6px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; }
+  .login-field input{
+    width:100%; padding:13px 14px; border-radius:12px;
+    background:var(--surface); border:1px solid var(--divider);
+    color:var(--cream); font-size:13.5px; font-family:inherit;
+    transition:border-color 0.2s ease;
+  }
+  .login-field input::placeholder{ color:var(--muted-dim); }
+  .login-field input:focus{ border-color:rgba(232,121,62,0.5); }
+  .login-submit{
+    width:100%; padding:14px; border-radius:12px; margin-top:6px;
+    background:linear-gradient(135deg, var(--ember-bright), var(--ember-deep));
+    color:#1a1108; font-weight:800; font-size:14px;
+    box-shadow:var(--shadow-ember);
+    transition:transform 0.15s ease;
+  }
+  .login-submit:hover{ transform:translateY(-1px); }
+  .login-submit:active{ transform:scale(0.98); }
+  .login-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; }
+  .login-divider div{ flex:1; height:1px; background:var(--divider); }
+  .login-divider span{ font-size:11px; color:var(--muted-dim); }
+  .login-ghost{
+    width:100%; padding:13px; border-radius:12px;
+    border:1.5px dashed rgba(245,236,225,0.2);
+    font-size:12.5px; font-weight:700; color:var(--muted);
+    transition:all 0.2s ease;
+  }
+  .login-ghost:hover{ color:var(--cream); border-color:rgba(245,236,225,0.4); }
+  .login-footer-text{ text-align:center; font-size:12px; color:var(--muted); margin-top:22px; }
+  .login-footer-text a{ color:var(--ember-bright); font-weight:700; }
+
+  /* ---------- shared header (home/friends/profile) ---------- */
+  .app-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 20px 10px; position:relative; z-index:3;
+  }
+  .brand{ display:flex; align-items:center; gap:8px; }
+  .brand-mark{
+    width:26px; height:26px; border-radius:8px;
+    background:radial-gradient(circle at 35% 30%, var(--ember-bright), var(--ember-deep));
+    box-shadow:var(--shadow-ember); display:flex; align-items:center; justify-content:center; font-size:13px;
+  }
+  .brand-name{ font-weight:800; font-size:17px; }
+  .header-icons{ display:flex; align-items:center; gap:14px; }
+  .icon-btn{
+    position:relative; width:34px; height:34px; border-radius:50%;
+    background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:15px;
+    transition:background 0.2s ease, transform 0.15s ease;
+  }
+  .icon-btn:active{ transform:scale(0.92); }
+  .icon-btn:hover{ background:var(--surface-2); }
+  .badge-dot{
+    position:absolute; top:-2px; right:-2px; width:15px; height:15px; border-radius:50%;
+    background:var(--ember); color:#1a1108; font-size:9px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px var(--bg);
+  }
+  .self-avatar{
+    width:34px; height:34px; border-radius:50%;
+    background:linear-gradient(135deg,#C77B4A,#7A4526);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+    box-shadow:0 0 0 2px var(--divider);
+  }
+
+  /* ---------- HOME ---------- */
+  #home{ padding-bottom:74px; }
+  .home-scroll{ flex:1; overflow-y:auto; position:relative; z-index:3; }
+  .greeting{ padding:14px 20px 4px; }
+  .greeting h1{ font-size:19px; font-weight:800; }
+  .greeting p{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+
+  .jump-back-card{
+    margin:16px 20px 0; padding:16px; border-radius:20px;
+    background:linear-gradient(135deg, rgba(232,121,62,0.16), rgba(46,35,24,0.6));
+    border:1px solid rgba(232,121,62,0.35);
+    position:relative; overflow:hidden;
+    box-shadow:0 0 30px rgba(232,121,62,0.12);
+  }
+  .jbc-label{ font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ember-bright); font-weight:800; margin-bottom:6px; }
+  .jbc-title{ font-size:15.5px; font-weight:800; margin-bottom:3px; }
+  .jbc-sub{ font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .jbc-btn{
+    padding:10px 18px; border-radius:999px; background:var(--ember); color:#1a1108;
+    font-weight:800; font-size:12.5px; box-shadow:var(--shadow-ember);
+    display:inline-flex; align-items:center; gap:6px; transition:transform 0.15s ease;
+  }
+  .jbc-btn:hover{ transform:translateY(-1px); }
+  .jbc-btn:active{ transform:scale(0.95); }
+  .jbc-glow{
+    position:absolute; width:160px; height:160px; border-radius:50%;
+    background:radial-gradient(circle, rgba(232,121,62,0.35), transparent 70%);
+    top:-60px; right:-40px; pointer-events:none;
+  }
+
+  .quick-actions{ display:flex; gap:10px; padding:16px 20px 4px; }
+  .qa-btn{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:7px;
+    padding:13px 6px; border-radius:16px; background:var(--surface);
+    font-size:11px; font-weight:700; color:var(--muted);
+    transition:background 0.2s ease, transform 0.15s ease;
+  }
+  .qa-btn:hover{ background:var(--surface-2); color:var(--cream); }
+  .qa-btn:active{ transform:scale(0.95); }
+  .qa-icon{
+    width:34px; height:34px; border-radius:50%; background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--ember-bright);
+  }
+
+  .together-strip{
+    display:flex; gap:10px; padding:16px 20px 4px;
+  }
+  .together-card{
+    flex:1; padding:13px 14px; border-radius:16px; background:var(--surface);
+    border:1px solid var(--divider);
+  }
+  .tc-num{ font-size:18px; font-weight:800; color:var(--ember-bright); }
+  .tc-label{ font-size:10.5px; color:var(--muted); margin-top:2px; }
+
+  .section-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:20px 20px 10px;
+  }
+  .section-row h2{ font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted-dim); font-weight:700; }
+  .section-row .see-all{ font-size:11.5px; color:var(--ember-bright); font-weight:700; }
+
+  .friend-rail{ display:flex; gap:14px; padding:0 20px 6px; overflow-x:auto; }
+  .rail-item{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:none; width:56px; }
+  .rail-name{ font-size:10.5px; color:var(--muted); }
+
+  .history-list{ display:flex; flex-direction:column; gap:2px; padding:0 12px 10px; }
+  .history-row{ display:flex; align-items:center; gap:12px; padding:9px 8px; border-radius:14px; transition:background 0.2s ease; }
+  .history-row:hover{ background:var(--surface); }
+  .poster{ width:38px; height:52px; border-radius:8px; flex:none; }
+  .history-info{ flex:1; min-width:0; }
+  .history-title{ font-size:13.5px; font-weight:700; }
+  .history-meta{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+
+  /* ---------- FRIENDS (as its own tab) ---------- */
+  #friends{ padding-bottom:74px; }
+  .friends-scroll{ flex:1; overflow-y:auto; position:relative; z-index:3; }
+  .status-row{ display:flex; gap:8px; padding:14px 20px 14px; }
+  .status-pill{
+    padding:7px 13px; border-radius:999px; font-size:11.5px; font-weight:600;
+    background:var(--surface); color:var(--muted); border:1px solid transparent; transition:all 0.2s ease;
+  }
+  .status-pill.active{ background:rgba(232,121,62,0.14); color:var(--ember-bright); border-color:rgba(232,121,62,0.4); }
+  .status-pill:hover{ color:var(--cream); }
+  .section-label{ padding:4px 20px 10px; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted-dim); font-weight:700; }
+  .friend-list{ display:flex; flex-direction:column; padding:0 12px; gap:2px; }
+  .friend-row{
+    display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:14px;
+    transition:background 0.2s ease, transform 0.2s ease; text-align:left; width:100%;
+  }
+  .friend-row:hover{ background:var(--surface); transform:translateX(2px); }
+  .friend-row:active{ transform:scale(0.99); }
+  .avatar-wrap{ position:relative; width:46px; height:46px; flex:none; }
+  .avatar{ width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; color:#1a1108; }
+  .status-ring{ position:absolute; inset:-3px; border-radius:50%; padding:3px; }
+  .status-ring.online{ background:conic-gradient(var(--online), var(--online)); animation:softPulse 2.4s ease-in-out infinite; }
+  .status-ring.hosting{ background:conic-gradient(from 0deg, var(--ember-bright), var(--ember), var(--ember-deep), var(--ember-bright)); animation:spin 3.2s linear infinite; }
+  .status-ring.offline{ background:var(--surface-3); }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @keyframes softPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(143,217,168,0.5); } 50%{ box-shadow:0 0 0 4px rgba(143,217,168,0); } }
+  .ring-mask{ width:100%; height:100%; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; }
+  .live-badge{
+    position:absolute; bottom:-3px; right:-3px; width:16px; height:16px; border-radius:50%;
+    background:var(--ember); color:#1a1108; font-size:9px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px var(--bg);
+  }
+  .friend-info{ flex:1; min-width:0; }
+  .friend-name{ font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:6px; }
+  .friend-meta{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .friend-meta.hosting-text{ color:var(--ember-bright); font-weight:600; }
+  .nights{ color:var(--muted-dim); } .nights b{ color:var(--muted); }
+  .join-btn{
+    padding:8px 14px; border-radius:999px; background:var(--ember); color:#1a1108; font-size:12.5px; font-weight:800;
+    flex:none; box-shadow:var(--shadow-ember); transition:transform 0.15s ease, box-shadow 0.2s ease;
+  }
+  .join-btn:hover{ transform:translateY(-1px); box-shadow:0 0 30px rgba(232,121,62,0.6); }
+  .join-btn:active{ transform:scale(0.94); }
+  .offline-text{ font-size:11.5px; color:var(--muted-dim); flex:none; }
+  .request-card{
+    margin:14px 12px 0; padding:12px 14px; border-radius:16px; background:var(--surface);
+    border:1px dashed rgba(245,236,225,0.14); display:flex; align-items:center; gap:10px;
+  }
+  .request-avatar{ width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#8A7CBE,#4B4180); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex:none; }
+  .request-text{ flex:1; font-size:12.5px; color:var(--muted); } .request-text b{ color:var(--cream); }
+  .request-actions{ display:flex; gap:6px; }
+  .req-accept, .req-decline{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; transition:transform 0.15s ease; }
+  .req-accept{ background:rgba(143,217,168,0.16); color:var(--online); }
+  .req-decline{ background:rgba(245,236,225,0.08); color:var(--muted); }
+  .req-accept:active, .req-decline:active{ transform:scale(0.85); }
+  .friends-bottom{ padding:16px 20px 20px; }
+  .ticket-cta{
+    width:100%; padding:14px 16px; border-radius:18px; background:var(--surface);
+    border:1.5px dashed rgba(245,236,225,0.22); font-size:12.5px; font-weight:700; color:var(--muted);
+    display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s ease;
+  }
+  .ticket-cta:hover{ color:var(--cream); border-color:rgba(245,236,225,0.4); }
+  .ticket-cta:active{ transform:scale(0.97); }
+
+  /* ---------- PROFILE ---------- */
+  #profile{ padding-bottom:74px; align-items:center; }
+  .profile-hero{ text-align:center; padding:34px 20px 10px; }
+  .profile-avatar{
+    width:76px; height:76px; border-radius:50%; margin:0 auto 12px;
+    background:linear-gradient(135deg,#C77B4A,#7A4526);
+    display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800;
+    box-shadow:0 0 0 3px var(--divider);
+  }
+  .profile-name{ font-size:18px; font-weight:800; }
+  .profile-handle{ font-size:12px; color:var(--muted-dim); margin-top:2px; }
+  .profile-stats{ display:flex; gap:24px; justify-content:center; margin-top:18px; }
+  .ps-num{ font-size:16px; font-weight:800; color:var(--ember-bright); text-align:center; }
+  .ps-label{ font-size:10.5px; color:var(--muted); text-align:center; margin-top:2px; }
+  .profile-menu{ width:100%; padding:24px 16px 0; display:flex; flex-direction:column; gap:2px; }
+  .profile-row{
+    display:flex; align-items:center; gap:12px; padding:13px 10px; border-radius:14px;
+    transition:background 0.2s ease; width:100%; text-align:left;
+  }
+  .profile-row:hover{ background:var(--surface); }
+  .profile-row-icon{ width:30px; height:30px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .profile-row-label{ font-size:13.5px; font-weight:600; flex:1; }
+  .profile-row.signout .profile-row-label{ color:var(--ember-bright); }
+
+  /* ---------- WATCHING ---------- */
+  #watching{ background:#000; }
+  .watch-top{ display:flex; align-items:center; justify-content:space-between; padding:18px 16px 10px; position:relative; z-index:5; }
+  .back-btn{ width:32px; height:32px; border-radius:50%; background:rgba(20,15,11,0.6); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; font-size:15px; transition:transform 0.15s ease; }
+  .back-btn:active{ transform:scale(0.9); }
+  .watch-title{ text-align:center; } .watch-title .who{ font-size:13px; font-weight:700; } .watch-title .sub{ font-size:10.5px; color:var(--muted); }
+  .conn-quality{ display:flex; align-items:flex-end; gap:2px; height:14px; }
+  .conn-bar{ width:3px; background:var(--online); border-radius:2px; transition:height 0.6s ease; }
+  .video-area{
+    position:relative; margin:4px 12px 0; border-radius:20px; overflow:hidden;
+    background:radial-gradient(circle at 30% 20%, #3a2a1f, transparent 55%), radial-gradient(circle at 75% 70%, #1c2b33, transparent 60%), linear-gradient(160deg, #241b14, #0a0706);
+    height:230px; flex:none; z-index:3;
+  }
+  .sprocket-row{ position:absolute; left:0; right:0; display:flex; justify-content:space-between; padding:0 8px; z-index:4; }
+  .sprocket-row.top{ top:6px; } .sprocket-row.bottom{ bottom:6px; }
+  .sprocket-hole{ width:6px; height:9px; border-radius:2px; background:rgba(0,0,0,0.55); }
+  .video-tap-target{ position:absolute; inset:0; }
+  .center-play{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:52px; height:52px; border-radius:50%; background:rgba(19,15,12,0.55); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; font-size:18px; opacity:0;
+    transition:opacity 0.25s ease, transform 0.15s ease; z-index:6;
+  }
+  .video-area.show-controls .center-play{ opacity:1; }
+  .center-play:active{ transform:translate(-50%,-50%) scale(0.9); }
+  .video-controls{
+    position:absolute; left:0; right:0; bottom:0; padding:8px 12px 10px;
+    background:linear-gradient(0deg, rgba(0,0,0,0.65), transparent); opacity:0; transition:opacity 0.25s ease; z-index:6;
+  }
+  .video-area.show-controls .video-controls{ opacity:1; }
+  .scrub-track{ height:4px; border-radius:2px; background:rgba(245,236,225,0.2); position:relative; cursor:pointer; margin-bottom:6px; }
+  .scrub-fill{ position:absolute; top:0; left:0; bottom:0; width:38%; border-radius:2px; background:var(--ember-bright); }
+  .scrub-thumb{ position:absolute; top:50%; left:38%; width:10px; height:10px; border-radius:50%; background:var(--cream); transform:translate(-50%,-50%); box-shadow:0 0 6px rgba(0,0,0,0.5); }
+  .time-row{ display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
+  .host-flag{
+    position:absolute; top:10px; left:10px; padding:4px 9px; border-radius:999px; background:rgba(19,15,12,0.6);
+    backdrop-filter:blur(4px); font-size:10px; font-weight:700; color:var(--ember-bright); display:flex; align-items:center; gap:4px; z-index:6;
+  }
+  .reaction-row{ display:flex; justify-content:center; gap:10px; padding:12px 0 6px; position:relative; z-index:5; }
+  .reaction-btn{ width:38px; height:38px; border-radius:50%; background:var(--surface); font-size:16px; display:flex; align-items:center; justify-content:center; transition:transform 0.15s ease, background 0.2s ease; }
+  .reaction-btn:hover{ background:var(--surface-2); }
+  .reaction-btn:active{ transform:scale(0.85); }
+  .floating-reaction{ position:absolute; bottom:40px; font-size:20px; z-index:7; pointer-events:none; animation:floatUp 1.6s ease-out forwards; }
+  @keyframes floatUp{ 0%{ opacity:0; transform:translateY(0) scale(0.6); } 15%{ opacity:1; transform:translateY(-10px) scale(1.1); } 100%{ opacity:0; transform:translateY(-120px) scale(1); } }
+  .chat-sheet{ flex:1; background:var(--surface); border-radius:22px 22px 0 0; display:flex; flex-direction:column; min-height:0; position:relative; z-index:5; box-shadow:0 -12px 30px rgba(0,0,0,0.35); }
+  .drag-handle-wrap{ display:flex; justify-content:center; padding:10px 0 4px; cursor:pointer; }
+  .drag-handle{ width:36px; height:4px; border-radius:3px; background:var(--muted-dim); }
+  .chat-head{ display:flex; align-items:center; justify-content:space-between; padding:0 16px 8px; border-bottom:1px solid var(--divider); }
+  .chat-head-title{ font-size:12.5px; font-weight:700; color:var(--muted); letter-spacing:0.03em; }
+  .chat-head-count{ font-size:11px; color:var(--muted-dim); }
+  .messages{ flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:12px; min-height:60px; }
+  .msg{ max-width:78%; animation:msgIn 0.35s ease; }
+  @keyframes msgIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0);} }
+  .msg-meta{ display:flex; gap:6px; align-items:baseline; margin-bottom:3px; }
+  .msg-name{ font-size:11px; font-weight:700; color:var(--ember-bright); }
+  .msg-time{ font-size:9.5px; color:var(--muted-dim); }
+  .msg-bubble{ padding:8px 12px; border-radius:14px; font-size:13px; line-height:1.4; background:var(--surface-2); color:var(--cream); display:inline-block; }
+  .msg.own{ align-self:flex-end; text-align:right; }
+  .msg.own .msg-meta{ justify-content:flex-end; }
+  .msg.own .msg-name{ color:var(--muted); }
+  .msg.own .msg-bubble{ background:linear-gradient(135deg, var(--ember), var(--ember-deep)); color:#1a1108; font-weight:500; }
+  .typing-indicator{ display:flex; gap:4px; align-items:center; padding:8px 12px; border-radius:14px; background:var(--surface-2); width:fit-content; }
+  .typing-dot{ width:5px; height:5px; border-radius:50%; background:var(--muted); animation:typingBounce 1.2s infinite ease-in-out; }
+  .typing-dot:nth-child(2){ animation-delay:0.15s; } .typing-dot:nth-child(3){ animation-delay:0.3s; }
+  @keyframes typingBounce{ 0%,60%,100%{ transform:translateY(0); opacity:0.5; } 30%{ transform:translateY(-4px); opacity:1; } }
+  .chat-input-row{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--divider); }
+  .chat-input{ flex:1; background:var(--surface-2); border-radius:999px; padding:10px 14px; font-size:13px; color:var(--cream); font-family:inherit; }
+  .chat-input::placeholder{ color:var(--muted-dim); }
+  .send-btn{ width:36px; height:36px; border-radius:50%; background:var(--ember); color:#1a1108; display:flex; align-items:center; justify-content:center; font-size:14px; flex:none; transition:transform 0.15s ease; }
+  .send-btn:active{ transform:scale(0.88); }
+
+  /* ---------- BOTTOM NAV ---------- */
+  .bottom-nav{
+    position:absolute; left:0; right:0; bottom:0; height:64px; z-index:20;
+    background:rgba(28,22,17,0.9); backdrop-filter:blur(10px);
+    border-top:1px solid var(--divider);
+    display:flex; align-items:center; justify-content:space-around;
+  }
+  .nav-btn{ display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--muted-dim); font-size:10px; font-weight:700; transition:color 0.2s ease, transform 0.15s ease; }
+  .nav-btn .nav-icon{ font-size:17px; }
+  .nav-btn.active{ color:var(--ember-bright); }
+  .nav-btn:active{ transform:scale(0.9); }
+
+  /* ---------- CURTAINS ---------- */
+  .curtain{
+    position:absolute; top:0; bottom:0; width:52%; z-index:100;
+    background:repeating-linear-gradient(90deg, #6E2A11 0px, #6E2A11 16px, #58200C 16px, #58200C 32px);
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.55);
+    transition:transform 0.68s cubic-bezier(.76,0,.24,1);
+  }
+  .curtain::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:14px;
+    background:repeating-radial-gradient(circle at 10px -4px, var(--gold) 0 5px, transparent 6px 20px); opacity:0.85;
+  }
+  .curtain--left{ left:0; transform:translateX(-101%); }
+  .curtain--right{ right:0; transform:translateX(101%); }
+  .curtain--left.closed{ transform:translateX(0); }
+  .curtain--right.closed{ transform:translateX(0); }
+
+  /* ---------- demo stage wrapper ---------- */
+  .stage{ display:flex; align-items:center; justify-content:center; }
+</style>
+</head>
+<body>
+
+<!-- ===================== LANDING NAV ===================== -->
+<header class="lp-nav">
+  <div class="lp-brand"><div class="lp-brand-mark">🔥</div>Hearth</div>
+  <nav class="lp-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#demo">Try it</a>
+  </nav>
+  <a href="#demo" class="lp-nav-cta">Try the demo</a>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="lp-hero">
+  <div class="lp-hero-inner">
+    <div class="lp-hero-text reveal">
+      <div class="lp-eyebrow">A watch party, built for exactly two</div>
+      <h1>Sit close, press play, <em>watch it together</em> — from anywhere.</h1>
+      <p>Hearth streams your own local file straight to the person you're watching with. No uploads, no accounts for them to fumble with, no sync to fight — just a private room that feels like sharing a couch.</p>
+      <div class="lp-hero-ctas">
+        <a href="#demo" class="lp-btn-primary">Try the demo</a>
+        <a href="#how" class="lp-btn-ghost">How it works</a>
+      </div>
+    </div>
+    <div class="lp-hero-visual reveal">
+      <div class="hero-glow"></div>
+      <div class="hero-phone">
+        <div class="hero-phone-screen">
+          <div class="hp-bar"><div class="hp-dot"></div><div class="hp-avatar"></div></div>
+          <div class="hp-video"><div class="hp-play">▶</div></div>
+          <div class="hp-chat">
+            <div class="hp-bubble hp-b1"></div>
+            <div class="hp-bubble hp-b2"></div>
+            <div class="hp-bubble hp-b3 own"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURES ===================== -->
+<section class="lp-features" id="features">
+  <div class="lp-section-head reveal">
+    <div class="lp-eyebrow">Everything for movie night</div>
+    <h2>Nothing extra to set up</h2>
+    <p>Hearth keeps the whole experience down to a room, a stream, and a chat — no libraries, no shared drives, no fuss.</p>
+  </div>
+  <div class="lp-features-grid">
+    <div class="lp-feature-card reveal"><div class="lp-feature-icon">🎞️</div><h3>Stream your own copy</h3><p>The host plays a local file — Hearth captures the video output and streams it live, so nobody has to upload or own a copy.</p></div>
+    <div class="lp-feature-card reveal"><div class="lp-feature-icon">🔁</div><h3>Perfectly in sync</h3><p>Because the viewer is watching a live feed, pausing, rewinding, or seeking happens for both of you at once. No sync logic to break.</p></div>
+    <div class="lp-feature-card reveal"><div class="lp-feature-icon">💬</div><h3>Chat next to the screen</h3><p>A text channel rides alongside the stream over an encrypted peer-to-peer data channel — no server ever sees your messages.</p></div>
+    <div class="lp-feature-card reveal"><div class="lp-feature-icon">👋</div><h3>One tap to join</h3><p>See when your person is hosting right from your friends list, and join their room with a single tap — no code needed.</p></div>
+  </div>
+</section>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section class="lp-how" id="how">
+  <div class="lp-section-head reveal">
+    <div class="lp-eyebrow">How it works</div>
+    <h2>Three steps to lights-down</h2>
+  </div>
+  <div class="lp-steps">
+    <div class="lp-step reveal"><div class="lp-step-num mono">01</div><h3>Pick your film</h3><p>The host opens Hearth and selects a video file already on their computer.</p></div>
+    <div class="lp-step reveal"><div class="lp-step-num mono">02</div><h3>Send the invite</h3><p>Tap a friend who's online, or hand anyone a ticket-stub code to join without an account.</p></div>
+    <div class="lp-step reveal"><div class="lp-step-num mono">03</div><h3>Press play, together</h3><p>The viewer sees exactly what the host sees, the moment it happens — curtains up.</p></div>
+  </div>
+</section>
+
+<!-- ===================== DEMO ===================== -->
+<section class="lp-demo" id="demo">
+  <div class="lp-demo-caption reveal">
+    <div class="lp-eyebrow">Try it yourself</div>
+    <p>Sign in, glance at <b>your</b> home screen, and open <b>Aanya's</b> movie night — watch the curtains do the work.</p>
+  </div>
+
+  <div class="stage">
+    <div class="device">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screens">
+
+          <!-- ===================== LOGIN ===================== -->
+          <section id="login" class="screen active">
+            <div class="login-mark">🔥</div>
+            <div class="login-title">Welcome back</div>
+            <div class="login-sub">Sign in to Hearth</div>
+            <div class="login-field">
+              <label for="username">Username</label>
+              <input id="username" type="text" placeholder="e.g. marshmello" value="marshmello">
+            </div>
+            <div class="login-field">
+              <label for="password">Password</label>
+              <input id="password" type="password" placeholder="••••••••" value="••••••••">
+            </div>
+            <button class="login-submit" id="loginSubmit">Sign in</button>
+            <div class="login-divider"><div></div><span>or</span><div></div></div>
+            <button class="login-ghost">🔗 I have an invite link</button>
+            <div class="login-footer-text">New to Hearth? <a href="#">Create an account</a></div>
+          </section>
+
+          <!-- ===================== HOME ===================== -->
+          <section id="home" class="screen">
+            <div class="ember-field" id="emberFieldHome"></div>
+            <div class="app-header">
+              <div class="brand"><div class="brand-mark">🔥</div><div class="brand-name">Hearth</div></div>
+              <div class="header-icons">
+                <button class="icon-btn" aria-label="Friend requests">🔔<span class="badge-dot">1</span></button>
+                <div class="self-avatar">M</div>
+              </div>
+            </div>
+
+            <div class="home-scroll">
+              <div class="greeting">
+                <h1>Good evening, Marshmello</h1>
+                <p>Here's what's happening tonight.</p>
+              </div>
+
+              <div class="jump-back-card" id="jumpBack">
+                <div class="jbc-glow"></div>
+                <div class="jbc-label">🎬 Live now</div>
+                <div class="jbc-title">Aanya is hosting a movie night</div>
+                <div class="jbc-sub">Started 6 minutes ago</div>
+                <span class="jbc-btn">▶ Join now</span>
+              </div>
+
+              <div class="quick-actions">
+                <button class="qa-btn"><div class="qa-icon">▶</div>Host</button>
+                <button class="qa-btn"><div class="qa-icon">🎟</div>Join code</button>
+                <button class="qa-btn"><div class="qa-icon">➕</div>Invite</button>
+              </div>
+
+              <div class="together-strip">
+                <div class="together-card"><div class="tc-num">24</div><div class="tc-label">Nights together</div></div>
+                <div class="together-card"><div class="tc-num">4 🔥</div><div class="tc-label">Night streak</div></div>
+              </div>
+
+              <div class="section-row"><h2>Friends</h2><button class="see-all" id="seeAllFriends">See all</button></div>
+              <div class="friend-rail">
+                <div class="rail-item">
+                  <div class="avatar-wrap" style="width:44px;height:44px;">
+                    <div class="status-ring hosting"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#E39A6B,#8A4A24); font-size:13px;">A</div></div></div>
+                    <div class="live-badge">🎬</div>
+                  </div>
+                  <div class="rail-name">Aanya</div>
+                </div>
+                <div class="rail-item">
+                  <div class="avatar-wrap" style="width:44px;height:44px;">
+                    <div class="status-ring online"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#8FC6D9,#3C5F6E); font-size:13px;">R</div></div></div>
+                  </div>
+                  <div class="rail-name">Rohan</div>
+                </div>
+                <div class="rail-item">
+                  <div class="avatar-wrap" style="width:44px;height:44px;">
+                    <div class="status-ring offline"><div class="ring-mask"><div class="avatar" style="background:#4A4038; opacity:0.7; font-size:13px;">K</div></div></div>
+                  </div>
+                  <div class="rail-name" style="opacity:0.6;">Kabir</div>
+                </div>
+              </div>
+
+              <div class="section-row"><h2>Watched together</h2></div>
+              <div class="history-list">
+                <div class="history-row">
+                  <div class="poster" style="background:linear-gradient(160deg,#4A6B8A,#1E3145);"></div>
+                  <div class="history-info"><div class="history-title">Interstellar</div><div class="history-meta">with Aanya · 3 days ago</div></div>
+                </div>
+                <div class="history-row">
+                  <div class="poster" style="background:linear-gradient(160deg,#B77A5A,#5C3623);"></div>
+                  <div class="history-info"><div class="history-title">Amélie</div><div class="history-meta">with Aanya · 1 week ago</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bottom-nav" id="bottomNavHome">
+              <button class="nav-btn active" data-target="home"><span class="nav-icon">🏠</span>Home</button>
+              <button class="nav-btn" data-target="friends"><span class="nav-icon">👥</span>Friends</button>
+              <button class="nav-btn" data-target="profile"><span class="nav-icon">👤</span>Profile</button>
+            </div>
+          </section>
+
+          <!-- ===================== FRIENDS ===================== -->
+          <section id="friends" class="screen">
+            <div class="app-header">
+              <div class="brand-name" style="font-size:18px;">Friends</div>
+              <div class="header-icons"><button class="icon-btn" aria-label="Search">🔍</button></div>
+            </div>
+            <div class="friends-scroll">
+              <div class="status-row">
+                <button class="status-pill active">● Online</button>
+                <button class="status-pill">Away</button>
+                <button class="status-pill">Appear offline</button>
+              </div>
+              <div class="section-label">Friends · 2 online</div>
+              <div class="friend-list">
+                <button class="friend-row" id="joinAanya">
+                  <div class="avatar-wrap">
+                    <div class="status-ring hosting"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#E39A6B,#8A4A24);">A</div></div></div>
+                    <div class="live-badge">🎬</div>
+                  </div>
+                  <div class="friend-info">
+                    <div class="friend-name">Aanya</div>
+                    <div class="friend-meta hosting-text">Hosting now · <span class="nights"><b>18</b> nights together</span></div>
+                  </div>
+                  <span class="join-btn">Join</span>
+                </button>
+                <button class="friend-row">
+                  <div class="avatar-wrap">
+                    <div class="status-ring online"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#8FC6D9,#3C5F6E);">R</div></div></div>
+                  </div>
+                  <div class="friend-info">
+                    <div class="friend-name">Rohan</div>
+                    <div class="friend-meta">Online · <span class="nights"><b>3</b> nights together</span></div>
+                  </div>
+                </button>
+                <button class="friend-row">
+                  <div class="avatar-wrap">
+                    <div class="status-ring offline"><div class="ring-mask"><div class="avatar" style="background:#4A4038; opacity:0.7;">K</div></div></div>
+                  </div>
+                  <div class="friend-info">
+                    <div class="friend-name" style="color:var(--muted);">Kabir</div>
+                    <div class="friend-meta">Active 2h ago</div>
+                  </div>
+                  <span class="offline-text">Offline</span>
+                </button>
+              </div>
+              <div class="request-card">
+                <div class="request-avatar">M</div>
+                <div class="request-text"><b>Meher</b> wants to be friends</div>
+                <div class="request-actions"><button class="req-accept">✓</button><button class="req-decline">✕</button></div>
+              </div>
+              <div class="friends-bottom"><button class="ticket-cta">🎟 Join with a code</button></div>
+            </div>
+            <div class="bottom-nav" id="bottomNavFriends">
+              <button class="nav-btn" data-target="home"><span class="nav-icon">🏠</span>Home</button>
+              <button class="nav-btn active" data-target="friends"><span class="nav-icon">👥</span>Friends</button>
+              <button class="nav-btn" data-target="profile"><span class="nav-icon">👤</span>Profile</button>
+            </div>
+          </section>
+
+          <!-- ===================== PROFILE ===================== -->
+          <section id="profile" class="screen">
+            <div class="app-header">
+              <div class="brand-name" style="font-size:18px;">Profile</div>
+              <div style="width:34px;"></div>
+            </div>
+            <div class="profile-hero">
+              <div class="profile-avatar">M</div>
+              <div class="profile-name">Marshmello</div>
+              <div class="profile-handle mono">@marshmello</div>
+              <div class="profile-stats">
+                <div><div class="ps-num">24</div><div class="ps-label">Nights together</div></div>
+                <div><div class="ps-num">12</div><div class="ps-label">Movies watched</div></div>
+                <div><div class="ps-num">2</div><div class="ps-label">Friends</div></div>
+              </div>
+            </div>
+            <div class="profile-menu">
+              <button class="profile-row"><div class="profile-row-icon">🙈</div><div class="profile-row-label">Privacy & status</div>›</button>
+              <button class="profile-row"><div class="profile-row-icon">🔔</div><div class="profile-row-label">Notifications</div>›</button>
+              <button class="profile-row"><div class="profile-row-icon">🎨</div><div class="profile-row-label">Appearance</div>›</button>
+              <button class="profile-row signout" id="signOutBtn"><div class="profile-row-icon">🚪</div><div class="profile-row-label">Sign out</div>›</button>
+            </div>
+            <div class="bottom-nav" id="bottomNavProfile">
+              <button class="nav-btn" data-target="home"><span class="nav-icon">🏠</span>Home</button>
+              <button class="nav-btn" data-target="friends"><span class="nav-icon">👥</span>Friends</button>
+              <button class="nav-btn active" data-target="profile"><span class="nav-icon">👤</span>Profile</button>
+            </div>
+          </section>
+
+          <!-- ===================== WATCHING ===================== -->
+          <section id="watching" class="screen">
+            <div class="watch-top">
+              <button class="back-btn" id="backBtn">←</button>
+              <div class="watch-title"><div class="who">Aanya's movie night</div><div class="sub">Peer connected · encrypted</div></div>
+              <div class="conn-quality" id="connQuality">
+                <div class="conn-bar" style="height:5px;"></div><div class="conn-bar" style="height:9px;"></div><div class="conn-bar" style="height:13px;"></div>
+              </div>
+            </div>
+            <div class="video-area" id="videoArea">
+              <div class="sprocket-row top"><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div></div>
+              <div class="sprocket-row bottom"><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div></div>
+              <div class="host-flag">🎬 Aanya is hosting</div>
+              <div class="video-tap-target" id="videoTap"></div>
+              <button class="center-play" id="centerPlay">▶</button>
+              <div class="video-controls">
+                <div class="scrub-track" id="scrubTrack"><div class="scrub-fill" id="scrubFill"></div><div class="scrub-thumb" id="scrubThumb"></div></div>
+                <div class="time-row"><span class="mono">42:18</span><span class="mono">1:47:03</span></div>
+              </div>
+            </div>
+            <div class="reaction-row">
+              <button class="reaction-btn" data-emoji="❤️">❤️</button>
+              <button class="reaction-btn" data-emoji="😂">😂</button>
+              <button class="reaction-btn" data-emoji="😱">😱</button>
+              <button class="reaction-btn" data-emoji="🤫">🤫</button>
+            </div>
+            <div class="chat-sheet">
+              <div class="drag-handle-wrap" id="dragHandle"><div class="drag-handle"></div></div>
+              <div class="chat-head"><div class="chat-head-title">CHAT</div><div class="chat-head-count mono">2 watching</div></div>
+              <div class="messages" id="messages">
+                <div class="msg"><div class="msg-meta"><span class="msg-name">Aanya</span><span class="msg-time mono">41:02</span></div><div class="msg-bubble">okay okay this is the part I told you about</div></div>
+                <div class="msg own"><div class="msg-meta"><span class="msg-name">You</span><span class="msg-time mono">41:20</span></div><div class="msg-bubble">I'm ready, go</div></div>
+              </div>
+              <div class="chat-input-row">
+                <input class="chat-input" id="chatInput" type="text" placeholder="Say something…">
+                <button class="send-btn" id="sendBtn">➤</button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+        <div class="curtain curtain--left" id="curtainLeft"></div>
+        <div class="curtain curtain--right" id="curtainRight"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="lp-footer">
+  <div class="lp-brand"><div class="lp-brand-mark">🔥</div>Hearth</div>
+  <p>A private cinema for two. Built for movie nights, not audiences.</p>
+</footer>
+
+<script>
+  // ---------- scroll reveal ----------
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold:0.15 });
+  revealEls.forEach(el=> io.observe(el));
+
+  // ---------- ember particles (home) ----------
+  const emberFieldHome = document.getElementById('emberFieldHome');
+  for(let i=0;i<10;i++){
+    const p = document.createElement('div');
+    p.className = 'ember-particle';
+    p.style.left = (10 + Math.random()*80) + '%';
+    p.style.animationDuration = (5 + Math.random()*5) + 's';
+    p.style.animationDelay = (Math.random()*6) + 's';
+    emberFieldHome.appendChild(p);
+  }
+
+  // ---------- screen state ----------
+  const MAIN_SCREENS = ['home','friends','profile'];
+  let lastMainScreen = 'home';
+
+  function showScreen(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if(MAIN_SCREENS.includes(id)){
+      lastMainScreen = id;
+      document.querySelectorAll('.nav-btn').forEach(b=> b.classList.toggle('active', b.dataset.target === id));
+    }
+  }
+
+  document.querySelectorAll('.nav-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> showScreen(btn.dataset.target));
+  });
+
+  document.getElementById('loginSubmit').addEventListener('click', ()=> showScreen('home'));
+  document.getElementById('seeAllFriends').addEventListener('click', ()=> showScreen('friends'));
+  document.getElementById('signOutBtn').addEventListener('click', ()=> showScreen('login'));
+
+  // ---------- curtain transition (reserved for entering/leaving a movie) ----------
+  const curtainLeft = document.getElementById('curtainLeft');
+  const curtainRight = document.getElementById('curtainRight');
+  let watchOpenedOnce = false;
+
+  function openMovie(){
+    curtainLeft.classList.add('closed');
+    curtainRight.classList.add('closed');
+    setTimeout(()=>{
+      document.getElementById(lastMainScreen).classList.remove('active');
+      document.getElementById('watching').classList.add('active');
+      if(!watchOpenedOnce){ watchOpenedOnce = true; setTimeout(simulateIncoming, 1400); }
+    }, 620);
+    setTimeout(()=>{
+      curtainLeft.classList.remove('closed');
+      curtainRight.classList.remove('closed');
+    }, 780);
+  }
+
+  function closeMovie(){
+    curtainLeft.classList.add('closed');
+    curtainRight.classList.add('closed');
+    setTimeout(()=>{
+      document.getElementById('watching').classList.remove('active');
+      document.getElementById(lastMainScreen).classList.add('active');
+    }, 620);
+    setTimeout(()=>{
+      curtainLeft.classList.remove('closed');
+      curtainRight.classList.remove('closed');
+    }, 780);
+  }
+
+  document.getElementById('jumpBack').addEventListener('click', openMovie);
+  document.getElementById('joinAanya').addEventListener('click', openMovie);
+  document.getElementById('backBtn').addEventListener('click', closeMovie);
+
+  // ---------- video controls ----------
+  const videoArea = document.getElementById('videoArea');
+  const videoTap = document.getElementById('videoTap');
+  const centerPlay = document.getElementById('centerPlay');
+  let hideTimer, playing = true;
+  function showControls(){
+    videoArea.classList.add('show-controls');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=> videoArea.classList.remove('show-controls'), 2800);
+  }
+  videoTap.addEventListener('click', showControls);
+  centerPlay.addEventListener('click', (e)=>{
+    e.stopPropagation(); playing = !playing;
+    centerPlay.textContent = playing ? '▶' : '❚❚';
+    showControls();
+  });
+  const scrubTrack = document.getElementById('scrubTrack');
+  const scrubFill = document.getElementById('scrubFill');
+  const scrubThumb = document.getElementById('scrubThumb');
+  scrubTrack.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const rect = scrubTrack.getBoundingClientRect();
+    const pct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    scrubFill.style.width = pct + '%'; scrubThumb.style.left = pct + '%';
+    showControls();
+  });
+
+  // ---------- connection quality flicker ----------
+  const bars = document.querySelectorAll('#connQuality .conn-bar');
+  setInterval(()=>{ bars.forEach((b,i)=>{ const base = 5 + i*4; b.style.height = (base + Math.random()*3) + 'px'; }); }, 2200);
+
+  // ---------- reactions ----------
+  document.querySelectorAll('.reaction-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const span = document.createElement('span');
+      span.className = 'floating-reaction';
+      span.textContent = btn.dataset.emoji;
+      span.style.left = (30 + Math.random()*40) + '%';
+      videoArea.appendChild(span);
+      setTimeout(()=> span.remove(), 1650);
+    });
+  });
+
+  // ---------- chat ----------
+  const messages = document.getElementById('messages');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('sendBtn');
+  function nowTimestamp(){ return '4' + Math.floor(1+Math.random()*9) + ':' + String(Math.floor(Math.random()*59)).padStart(2,'0'); }
+  function addMessage(text, own){
+    const div = document.createElement('div');
+    div.className = 'msg' + (own ? ' own' : '');
+    div.innerHTML = `<div class="msg-meta"><span class="msg-name">${own ? 'You' : 'Aanya'}</span><span class="msg-time mono">${nowTimestamp()}</span></div><div class="msg-bubble"></div>`;
+    div.querySelector('.msg-bubble').textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  }
+  function sendChat(){ const text = chatInput.value.trim(); if(!text) return; addMessage(text, true); chatInput.value = ''; }
+  sendBtn.addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+  function simulateIncoming(){
+    const typing = document.createElement('div');
+    typing.className = 'msg';
+    typing.innerHTML = `<div class="msg-meta"><span class="msg-name">Aanya</span></div><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+    messages.appendChild(typing); messages.scrollTop = messages.scrollHeight;
+    setTimeout(()=>{ typing.remove(); addMessage('shh, this bit is my favourite', false); }, 1500);
+  }
+
+  // ---------- chat sheet expand ----------
+  const chatSheet = document.querySelector('.chat-sheet');
+  document.getElementById('dragHandle').addEventListener('click', ()=>{
+    chatSheet.style.flex = chatSheet.style.flex === '2.4' ? '1' : '2.4';
+  });
+
+  // ---------- friends status pills ----------
+  document.querySelectorAll('.status-pill').forEach(p=>{
+    p.addEventListener('click', ()=>{
+      p.parentElement.querySelectorAll('.status-pill').forEach(x=>x.classList.remove('active'));
+      p.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

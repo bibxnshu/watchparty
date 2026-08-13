@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hearth — Desktop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#130F0C;
+    --surface:#1C1611;
+    --surface-2:#241C15;
+    --surface-3:#2E2318;
+    --ember:#E8793E;
+    --ember-bright:#FFA35C;
+    --ember-deep:#B85A28;
+    --gold:#D4AF6A;
+    --cream:#F5ECE1;
+    --muted:#9C8D7E;
+    --muted-dim:#6E6255;
+    --online:#8FD9A8;
+    --divider:rgba(245,236,225,0.08);
+    --shadow-ember: 0 0 24px rgba(232,121,62,0.45);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:radial-gradient(circle at 25% 15%, #241a12 0%, #0d0a08 45%, #080605 100%);
+    font-family:'Manrope', sans-serif;
+    color:var(--cream);
+    -webkit-font-smoothing:antialiased;
+    display:flex; align-items:center; justify-content:center;
+    padding:36px;
+    overflow:hidden;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; border:none; background:none; color:inherit; cursor:pointer; }
+  input{ font-family:inherit; }
+  button:focus-visible, input:focus-visible, .friend-row:focus-visible, a:focus-visible{
+    outline:2px solid var(--ember-bright); outline-offset:2px;
+  }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--surface-3); border-radius:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001s !important; animation-iteration-count:1 !important; transition-duration:0.001s !important; }
+  }
+
+  .hint{
+    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    font-size:11px; color:var(--muted-dim); letter-spacing:0.03em; z-index:1;
+    display:flex; gap:18px;
+  }
+  .hint b{ color:var(--muted); }
+
+  /* ============================================================
+     APP WINDOW
+     ============================================================ */
+  .app-window{
+    width:min(1280px, 94vw); height:min(800px, 88vh);
+    background:var(--bg); border-radius:16px; overflow:hidden;
+    box-shadow:0 60px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(245,236,225,0.06);
+    display:flex; flex-direction:column; position:relative;
+    transition:width 0.35s ease, height 0.35s ease, border-radius 0.35s ease;
+  }
+  .app-window.maximized{ width:97vw; height:94vh; border-radius:8px; }
+
+  /* ---------- titlebar ---------- */
+  .titlebar{
+    flex:none; height:42px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px 0 16px; background:var(--surface); border-bottom:1px solid var(--divider);
+    -webkit-app-region:drag; user-select:none;
+  }
+  .tb-brand{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:12.5px; letter-spacing:0.01em; }
+  .tb-mark{
+    width:18px; height:18px; border-radius:6px;
+    background:radial-gradient(circle at 35% 30%, var(--ember-bright), var(--ember-deep));
+    box-shadow:0 0 12px rgba(232,121,62,0.5);
+    display:flex; align-items:center; justify-content:center; font-size:10px;
+  }
+  .tb-controls{ display:flex; align-items:center; -webkit-app-region:no-drag; }
+  .tb-btn{
+    width:44px; height:42px; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); transition:background 0.15s ease, color 0.15s ease;
+  }
+  .tb-btn:hover{ background:rgba(245,236,225,0.08); color:var(--cream); }
+  .tb-btn.close:hover{ background:#E81123; color:#fff; }
+  .tb-btn svg{ width:11px; height:11px; }
+
+  /* ---------- window body ---------- */
+  .window-body{ flex:1; display:flex; min-height:0; position:relative; }
+
+  /* ============================================================
+     SIDEBAR
+     ============================================================ */
+  .sidebar{
+    width:238px; flex:none; background:var(--surface); border-right:1px solid var(--divider);
+    display:flex; flex-direction:column; padding:18px 14px 16px; gap:14px;
+    transition:width 0.2s ease, padding 0.2s ease;
+  }
+  .app-window.at-login .sidebar, .app-window.is-watching .sidebar{ display:none; }
+
+  .sb-profile{ display:flex; align-items:center; gap:10px; padding:0 4px 14px; border-bottom:1px solid var(--divider); }
+  .sb-avatar{
+    width:36px; height:36px; border-radius:50%; flex:none;
+    background:linear-gradient(135deg,#C77B4A,#7A4526);
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;
+    box-shadow:0 0 0 2px var(--divider);
+  }
+  .sb-profile-info{ min-width:0; }
+  .sb-profile-name{ font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sb-profile-status{ display:flex; align-items:center; gap:5px; font-size:11px; color:var(--online); margin-top:1px; }
+  .sb-profile-status i{ width:6px; height:6px; border-radius:50%; background:var(--online); box-shadow:0 0 6px var(--online); }
+
+  .sb-host-btn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; padding:12px; border-radius:12px;
+    background:linear-gradient(135deg, var(--ember-bright), var(--ember-deep));
+    color:#1a1108; font-weight:800; font-size:13px;
+    box-shadow:var(--shadow-ember);
+    transition:transform 0.15s ease;
+  }
+  .sb-host-btn:hover{ transform:translateY(-1px); }
+  .sb-host-btn:active{ transform:scale(0.98); }
+
+  .sb-nav{ display:flex; flex-direction:column; gap:2px; }
+  .sb-nav-item{
+    display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px;
+    font-size:13px; font-weight:600; color:var(--muted);
+    transition:background 0.15s ease, color 0.15s ease;
+  }
+  .sb-nav-item .sb-icon{ font-size:15px; width:18px; text-align:center; }
+  .sb-nav-item:hover{ background:var(--surface-2); color:var(--cream); }
+  .sb-nav-item.active{ background:rgba(232,121,62,0.14); color:var(--ember-bright); }
+
+  .sb-spacer{ flex:1; }
+  .sb-stats{ display:flex; gap:8px; }
+  .sb-stat{ flex:1; padding:10px; border-radius:12px; background:var(--surface-2); border:1px solid var(--divider); }
+  .sb-stat-num{ font-size:15px; font-weight:800; color:var(--ember-bright); }
+  .sb-stat-label{ font-size:9.5px; color:var(--muted-dim); margin-top:1px; text-transform:uppercase; letter-spacing:0.04em; }
+
+  @media (max-width:980px){
+    .sidebar{ width:72px; align-items:center; }
+    .sb-profile{ justify-content:center; }
+    .sb-profile-info, .sb-host-btn span, .sb-nav-item .sb-label, .sb-stats{ display:none; }
+    .sb-host-btn{ padding:12px; }
+    .sb-nav-item{ justify-content:center; }
+  }
+
+  /* ============================================================
+     CONTENT / VIEWS
+     ============================================================ */
+  .content{ flex:1; min-width:0; position:relative; overflow:hidden; }
+  .view{ position:absolute; inset:0; display:none; }
+  .view.active{ display:flex; animation:viewFade 0.3s ease; }
+  @keyframes viewFade{ from{ opacity:0; } to{ opacity:1; } }
+  .view-inner{ flex:1; overflow-y:auto; padding:30px 40px 50px; }
+
+  .section-head{ display:flex; align-items:center; justify-content:space-between; margin:30px 0 14px; }
+  .section-head h2{ font-size:11.5px; letter-spacing:0.09em; text-transform:uppercase; color:var(--muted-dim); font-weight:700; }
+  .section-head .see-all{ font-size:12px; color:var(--ember-bright); font-weight:700; }
+
+  /* ============================================================
+     LOGIN
+     ============================================================ */
+  #view-login{ background:var(--bg); }
+  .login-split{ flex:1; display:flex; }
+  .login-art{
+    flex:1.1; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 70% 20%, #33240F 0%, #180F09 55%, #0e0906 100%);
+    display:flex; flex-direction:column; justify-content:center; padding:60px;
+  }
+  .login-art-mark{
+    width:56px; height:56px; border-radius:18px; margin-bottom:26px;
+    background:radial-gradient(circle at 35% 30%, var(--ember-bright), var(--ember-deep));
+    display:flex; align-items:center; justify-content:center; font-size:24px;
+    box-shadow:var(--shadow-ember);
+    animation:markGlow 2.6s ease-in-out infinite;
+  }
+  @keyframes markGlow{
+    0%,100%{ box-shadow:0 0 24px rgba(232,121,62,0.45); }
+    50%{ box-shadow:0 0 42px rgba(232,121,62,0.8); }
+  }
+  .login-art h1{ font-size:clamp(26px,3vw,36px); font-weight:800; line-height:1.15; max-width:420px; letter-spacing:-0.01em; }
+  .login-art h1 em{ color:var(--ember-bright); font-style:normal; }
+  .login-art p{ font-size:13.5px; color:var(--muted); margin-top:14px; max-width:360px; line-height:1.6; }
+  .login-art-sprockets{ display:flex; gap:10px; margin-top:40px; opacity:0.5; }
+  .login-art-sprockets div{ width:6px; height:6px; border-radius:50%; background:var(--gold); }
+
+  .login-form-side{
+    flex:1; display:flex; align-items:center; justify-content:center; padding:40px;
+    background:var(--surface); border-left:1px solid var(--divider);
+  }
+  .login-card{ width:100%; max-width:320px; }
+  .login-title{ font-size:19px; font-weight:800; margin-bottom:4px; }
+  .login-sub{ font-size:12.5px; color:var(--muted); margin-bottom:26px; }
+  .login-field{ margin-bottom:14px; }
+  .login-field label{ display:block; font-size:11px; color:var(--muted-dim); margin-bottom:6px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; }
+  .login-field input{
+    width:100%; padding:12px 14px; border-radius:11px;
+    background:var(--surface-2); border:1px solid var(--divider);
+    color:var(--cream); font-size:13.5px;
+    transition:border-color 0.2s ease;
+  }
+  .login-field input::placeholder{ color:var(--muted-dim); }
+  .login-field input:focus{ border-color:rgba(232,121,62,0.5); }
+  .login-submit{
+    width:100%; padding:13px; border-radius:11px; margin-top:4px;
+    background:linear-gradient(135deg, var(--ember-bright), var(--ember-deep));
+    color:#1a1108; font-weight:800; font-size:13.5px;
+    box-shadow:var(--shadow-ember);
+    transition:transform 0.15s ease;
+  }
+  .login-submit:hover{ transform:translateY(-1px); }
+  .login-submit:active{ transform:scale(0.98); }
+  .login-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; }
+  .login-divider div{ flex:1; height:1px; background:var(--divider); }
+  .login-divider span{ font-size:11px; color:var(--muted-dim); }
+  .login-ghost{
+    width:100%; padding:12px; border-radius:11px;
+    border:1.5px dashed rgba(245,236,225,0.2);
+    font-size:12.5px; font-weight:700; color:var(--muted);
+    transition:all 0.2s ease;
+  }
+  .login-ghost:hover{ color:var(--cream); border-color:rgba(245,236,225,0.4); }
+  .login-footer-text{ text-align:center; font-size:12px; color:var(--muted); margin-top:22px; }
+  .login-footer-text a{ color:var(--ember-bright); font-weight:700; }
+
+  /* ============================================================
+     HOME
+     ============================================================ */
+  .home-topbar{ display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .home-greeting h1{ font-size:23px; font-weight:800; }
+  .home-greeting p{ font-size:13px; color:var(--muted); margin-top:3px; }
+  .home-actions{ display:flex; align-items:center; gap:12px; }
+  .search-input-wrap{ position:relative; }
+  .search-input-wrap .si-icon{ position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:12px; color:var(--muted-dim); }
+  .search-input{
+    width:230px; padding:9px 14px 9px 32px; border-radius:999px;
+    background:var(--surface); border:1px solid var(--divider); color:var(--cream); font-size:12.5px;
+    transition:border-color 0.2s ease, width 0.2s ease;
+  }
+  .search-input::placeholder{ color:var(--muted-dim); }
+  .search-input:focus{ border-color:rgba(232,121,62,0.4); width:260px; }
+  .icon-btn{
+    position:relative; width:36px; height:36px; border-radius:50%; flex:none;
+    background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:15px;
+    transition:background 0.2s ease, transform 0.15s ease;
+  }
+  .icon-btn:hover{ background:var(--surface-2); }
+  .icon-btn:active{ transform:scale(0.92); }
+  .badge-dot{
+    position:absolute; top:-2px; right:-2px; width:15px; height:15px; border-radius:50%;
+    background:var(--ember); color:#1a1108; font-size:9px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px var(--bg);
+  }
+
+  .hero-live{
+    margin-top:22px; padding:22px 26px; border-radius:20px; position:relative; overflow:hidden;
+    background:linear-gradient(120deg, rgba(232,121,62,0.16), rgba(46,35,24,0.55));
+    border:1px solid rgba(232,121,62,0.35);
+    box-shadow:0 0 40px rgba(232,121,62,0.12);
+    display:flex; align-items:center; justify-content:space-between; gap:26px;
+  }
+  .hero-live-glow{ position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(232,121,62,0.3), transparent 70%); top:-100px; right:-40px; pointer-events:none; }
+  .hero-live-text{ position:relative; z-index:1; }
+  .hl-label{ font-size:11px; letter-spacing:0.09em; text-transform:uppercase; color:var(--ember-bright); font-weight:800; margin-bottom:8px; }
+  .hl-title{ font-size:19px; font-weight:800; margin-bottom:4px; }
+  .hl-sub{ font-size:12.5px; color:var(--muted); margin-bottom:18px; }
+  .hl-btn{
+    padding:11px 20px; border-radius:999px; background:var(--ember); color:#1a1108;
+    font-weight:800; font-size:12.5px; box-shadow:var(--shadow-ember);
+    display:inline-flex; align-items:center; gap:7px; transition:transform 0.15s ease;
+  }
+  .hl-btn:hover{ transform:translateY(-1px); }
+  .hero-live-preview{
+    flex:none; width:180px; height:112px; border-radius:14px; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 30% 20%, #3a2a1f, transparent 55%), linear-gradient(160deg,#241b14,#0a0706);
+    border:1px solid rgba(232,121,62,0.25);
+  }
+  .hero-live-preview .hlp-play{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:34px; height:34px; border-radius:50%; background:rgba(232,121,62,0.85);
+    display:flex; align-items:center; justify-content:center; font-size:12px;
+    box-shadow:var(--shadow-ember);
+  }
+  .hlp-sprocket{ position:absolute; left:8px; right:8px; height:1px; background:repeating-linear-gradient(90deg, rgba(0,0,0,0.5) 0 4px, transparent 4px 10px); }
+  .hlp-sprocket.top{ top:6px; } .hlp-sprocket.bottom{ bottom:6px; }
+
+  .quick-actions{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:20px; }
+  .qa-card{
+    display:flex; align-items:center; gap:12px; padding:15px 16px; border-radius:16px;
+    background:var(--surface); border:1px solid var(--divider); text-align:left;
+    transition:background 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+  }
+  .qa-card:hover{ background:var(--surface-2); border-color:rgba(232,121,62,0.3); transform:translateY(-2px); }
+  .qa-icon{ width:38px; height:38px; border-radius:11px; flex:none; background:rgba(232,121,62,0.14); color:var(--ember-bright); display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .qa-title{ font-size:13px; font-weight:700; }
+  .qa-sub{ font-size:11px; color:var(--muted); margin-top:1px; }
+
+  .home-grid{ display:grid; grid-template-columns:1fr 300px; gap:34px; margin-top:8px; }
+  .home-main .section-head{ margin-top:34px; }
+  .poster-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:16px; }
+  .poster-card{ cursor:default; }
+  .poster-thumb{ width:100%; aspect-ratio:2/3; border-radius:12px; margin-bottom:8px; transition:transform 0.2s ease, box-shadow 0.2s ease; }
+  .poster-card:hover .poster-thumb{ transform:translateY(-4px); box-shadow:0 14px 26px rgba(0,0,0,0.4); }
+  .poster-title{ font-size:12.5px; font-weight:700; }
+  .poster-meta{ font-size:10.5px; color:var(--muted); margin-top:2px; }
+
+  .home-aside{ padding-top:2px; }
+  .panel-card{ background:var(--surface); border:1px solid var(--divider); border-radius:16px; padding:6px; }
+  .friend-row{
+    display:flex; align-items:center; gap:11px; padding:9px 8px; border-radius:12px;
+    width:100%; text-align:left; transition:background 0.2s ease;
+  }
+  .friend-row:hover{ background:var(--surface-2); }
+  .avatar-wrap{ position:relative; width:38px; height:38px; flex:none; }
+  .avatar{ width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:#1a1108; }
+  .status-ring{ position:absolute; inset:-3px; border-radius:50%; padding:3px; }
+  .status-ring.online{ background:conic-gradient(var(--online), var(--online)); animation:softPulse 2.4s ease-in-out infinite; }
+  .status-ring.hosting{ background:conic-gradient(from 0deg, var(--ember-bright), var(--ember), var(--ember-deep), var(--ember-bright)); animation:spin 3.2s linear infinite; }
+  .status-ring.offline{ background:var(--surface-3); }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @keyframes softPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(143,217,168,0.5); } 50%{ box-shadow:0 0 0 4px rgba(143,217,168,0); } }
+  .ring-mask{ width:100%; height:100%; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; }
+  .live-badge{ position:absolute; bottom:-2px; right:-2px; width:14px; height:14px; border-radius:50%; background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:8px; box-shadow:0 0 0 2px var(--surface); }
+  .friend-info{ flex:1; min-width:0; }
+  .friend-name{ font-size:12.5px; font-weight:700; }
+  .friend-meta{ font-size:10.5px; color:var(--muted); margin-top:1px; }
+  .hosting-text{ color:var(--ember-bright); }
+  .join-btn{ padding:6px 12px; border-radius:999px; background:var(--ember); color:#1a1108; font-size:10.5px; font-weight:800; flex:none; }
+
+  .stats-row{ display:flex; gap:10px; margin-top:16px; }
+  .stat-tile{ flex:1; padding:14px; border-radius:16px; background:var(--surface); border:1px solid var(--divider); }
+  .stat-num{ font-size:19px; font-weight:800; color:var(--ember-bright); }
+  .stat-label{ font-size:10.5px; color:var(--muted); margin-top:2px; }
+
+  /* ============================================================
+     FRIENDS
+     ============================================================ */
+  .friends-header h1{ font-size:23px; font-weight:800; }
+  .friends-toolbar{ display:flex; align-items:center; justify-content:space-between; margin-top:16px; gap:14px; }
+  .status-row{ display:flex; gap:8px; }
+  .status-pill{ padding:7px 14px; border-radius:999px; font-size:11.5px; font-weight:600; background:var(--surface); color:var(--muted); border:1px solid transparent; transition:all 0.2s ease; }
+  .status-pill.active{ background:rgba(232,121,62,0.14); color:var(--ember-bright); border-color:rgba(232,121,62,0.4); }
+  .status-pill:hover{ color:var(--cream); }
+
+  .friends-grid{ display:grid; grid-template-columns:1fr 280px; gap:34px; margin-top:22px; }
+  .friends-list-card{ background:var(--surface); border:1px solid var(--divider); border-radius:18px; padding:8px; }
+  .friends-list-card .friend-row{ padding:12px 10px; }
+  .friends-list-card .avatar-wrap{ width:44px; height:44px; }
+  .friends-list-card .friend-name{ font-size:13.5px; }
+  .friends-list-card .friend-meta{ font-size:11.5px; }
+  .friend-divider{ height:1px; background:var(--divider); margin:2px 6px; }
+
+  .request-card{ display:flex; align-items:center; gap:11px; padding:14px; border-radius:16px; background:var(--surface); border:1px solid var(--divider); }
+  .request-avatar{ width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#C0A6D8,#5B4472); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex:none; }
+  .request-text{ flex:1; font-size:12.5px; }
+  .request-text b{ font-weight:800; }
+  .request-actions{ display:flex; gap:6px; }
+  .req-accept, .req-decline{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .req-accept{ background:var(--online); color:#0e2415; }
+  .req-decline{ background:var(--surface-2); color:var(--muted); }
+
+  .join-code-card{ padding:16px; border-radius:16px; background:var(--surface); border:1px solid var(--divider); margin-top:14px; }
+  .join-code-card h3{ font-size:12px; font-weight:700; margin-bottom:10px; }
+  .join-code-row{ display:flex; gap:8px; }
+  .join-code-row input{ flex:1; padding:10px 12px; border-radius:10px; background:var(--surface-2); border:1px solid var(--divider); color:var(--cream); font-size:12.5px; letter-spacing:0.06em; }
+  .join-code-row input::placeholder{ color:var(--muted-dim); }
+  .join-code-row button{ padding:10px 16px; border-radius:10px; background:var(--ember); color:#1a1108; font-weight:800; font-size:12px; }
+
+  /* ============================================================
+     PROFILE
+     ============================================================ */
+  .profile-grid{ display:grid; grid-template-columns:280px 1fr; gap:34px; margin-top:10px; }
+  .profile-card{ background:var(--surface); border:1px solid var(--divider); border-radius:20px; padding:28px 22px; text-align:center; }
+  .profile-avatar{ width:76px; height:76px; border-radius:50%; margin:0 auto 14px; background:linear-gradient(135deg,#C77B4A,#7A4526); display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; box-shadow:0 0 0 4px var(--surface-2); }
+  .profile-name{ font-size:16.5px; font-weight:800; }
+  .profile-handle{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .profile-stats{ display:flex; flex-direction:column; gap:10px; margin-top:22px; }
+  .ps-row{ display:flex; align-items:center; justify-content:space-between; padding:11px 14px; border-radius:12px; background:var(--surface-2); }
+  .ps-num{ font-size:15px; font-weight:800; color:var(--ember-bright); }
+  .ps-label{ font-size:11.5px; color:var(--muted); }
+
+  .settings-card{ background:var(--surface); border:1px solid var(--divider); border-radius:20px; padding:8px; height:fit-content; }
+  .profile-row{ display:flex; align-items:center; gap:13px; width:100%; padding:14px; border-radius:14px; text-align:left; transition:background 0.2s ease; }
+  .profile-row:hover{ background:var(--surface-2); }
+  .profile-row-icon{ width:34px; height:34px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:15px; flex:none; }
+  .profile-row-label{ flex:1; font-size:13px; font-weight:600; }
+  .profile-row-chev{ color:var(--muted-dim); }
+  .profile-row.signout .profile-row-label{ color:#E8916A; }
+  .profile-row.signout .profile-row-icon{ background:rgba(232,121,62,0.12); color:var(--ember-bright); }
+
+  /* ============================================================
+     WATCHING
+     ============================================================ */
+  .watch-view{ flex-direction:row; }
+  .watch-video-col{ flex:1; min-width:0; display:flex; flex-direction:column; background:#0b0806; }
+  .watch-topbar{ flex:none; height:58px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid var(--divider); background:var(--surface); }
+  .back-btn{ width:34px; height:34px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:15px; flex:none; transition:background 0.2s ease; }
+  .back-btn:hover{ background:var(--surface-3); }
+  .watch-title{ flex:1; min-width:0; }
+  .watch-title .who{ font-size:13.5px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .watch-title .sub{ font-size:11px; color:var(--online); margin-top:1px; }
+  .conn-quality{ display:flex; align-items:flex-end; gap:2px; height:14px; flex:none; }
+  .conn-bar{ width:3px; border-radius:2px; background:var(--online); }
+  .theater-toggle{
+    display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:999px;
+    background:var(--surface-2); font-size:11.5px; font-weight:700; color:var(--muted); flex:none;
+    transition:background 0.2s ease, color 0.2s ease;
+  }
+  .theater-toggle:hover{ background:var(--surface-3); color:var(--cream); }
+
+  .video-area{ flex:1; position:relative; overflow:hidden; background:radial-gradient(circle at 50% 40%, #241b14 0%, #0b0806 70%); cursor:pointer; }
+  .sprocket-row{ position:absolute; left:0; right:0; height:12px; display:flex; justify-content:space-evenly; align-items:center; z-index:2; opacity:0.6; }
+  .sprocket-row.top{ top:0; } .sprocket-row.bottom{ bottom:0; }
+  .sprocket-hole{ width:7px; height:7px; border-radius:2px; background:#000; }
+  .host-flag{
+    position:absolute; top:20px; left:20px; z-index:3; padding:7px 13px; border-radius:999px;
+    background:rgba(19,15,12,0.65); backdrop-filter:blur(6px); font-size:11.5px; font-weight:700;
+    border:1px solid rgba(245,236,225,0.1);
+  }
+  .center-play{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
+    width:64px; height:64px; border-radius:50%; background:rgba(232,121,62,0.9); color:#1a1108;
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    box-shadow:var(--shadow-ember); opacity:0; pointer-events:none; transition:opacity 0.25s ease;
+  }
+  .video-area.show-controls .center-play{ opacity:1; pointer-events:auto; }
+  .video-controls{
+    position:absolute; left:0; right:0; bottom:0; z-index:4; padding:34px 24px 16px;
+    background:linear-gradient(0deg, rgba(0,0,0,0.7), transparent);
+    opacity:0; transform:translateY(6px); transition:opacity 0.25s ease, transform 0.25s ease; pointer-events:none;
+  }
+  .video-area.show-controls .video-controls{ opacity:1; transform:translateY(0); pointer-events:auto; }
+  .scrub-track{ height:4px; border-radius:3px; background:rgba(245,236,225,0.18); position:relative; cursor:pointer; }
+  .scrub-fill{ position:absolute; left:0; top:0; bottom:0; width:38%; border-radius:3px; background:var(--ember-bright); }
+  .scrub-thumb{ position:absolute; top:50%; left:38%; width:11px; height:11px; border-radius:50%; background:var(--cream); transform:translate(-50%,-50%); box-shadow:0 0 0 3px rgba(232,121,62,0.35); }
+  .time-row{ display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:8px; }
+  .reaction-row{
+    position:absolute; left:20px; bottom:60px; z-index:4; display:flex; gap:6px;
+    opacity:0; transition:opacity 0.25s ease; pointer-events:none;
+  }
+  .video-area.show-controls .reaction-row{ opacity:1; pointer-events:auto; }
+  .reaction-btn{ width:34px; height:34px; border-radius:50%; background:rgba(28,22,17,0.75); backdrop-filter:blur(6px); font-size:15px; display:flex; align-items:center; justify-content:center; transition:transform 0.15s ease; }
+  .reaction-btn:hover{ transform:scale(1.15); }
+  .floating-reaction{ position:absolute; bottom:110px; font-size:22px; animation:floatUp 1.6s ease forwards; z-index:5; pointer-events:none; }
+  @keyframes floatUp{ 0%{ opacity:0; transform:translateY(0) scale(0.6);} 15%{opacity:1; transform:translateY(-10px) scale(1);} 100%{ opacity:0; transform:translateY(-140px) scale(1.1);} }
+
+  .chat-panel{ width:340px; flex:none; display:flex; flex-direction:column; background:var(--surface); border-left:1px solid var(--divider); transition:width 0.2s ease, opacity 0.2s ease; }
+  .chat-panel.hidden{ width:0; opacity:0; overflow:hidden; border-left:none; }
+  .chat-head{ flex:none; height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; border-bottom:1px solid var(--divider); }
+  .chat-head-title{ font-size:12px; font-weight:700; color:var(--muted); letter-spacing:0.06em; }
+  .chat-head-count{ font-size:11px; color:var(--muted-dim); }
+  .messages{ flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:14px; }
+  .msg{ max-width:88%; animation:msgIn 0.35s ease; }
+  @keyframes msgIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0);} }
+  .msg-meta{ display:flex; gap:6px; align-items:baseline; margin-bottom:3px; }
+  .msg-name{ font-size:11px; font-weight:700; color:var(--ember-bright); }
+  .msg-time{ font-size:9.5px; color:var(--muted-dim); }
+  .msg-bubble{ padding:9px 13px; border-radius:14px; font-size:13px; line-height:1.45; background:var(--surface-2); color:var(--cream); display:inline-block; }
+  .msg.own{ align-self:flex-end; text-align:right; }
+  .msg.own .msg-meta{ justify-content:flex-end; }
+  .msg.own .msg-name{ color:var(--muted); }
+  .msg.own .msg-bubble{ background:linear-gradient(135deg, var(--ember), var(--ember-deep)); color:#1a1108; font-weight:500; }
+  .typing-indicator{ display:flex; gap:4px; align-items:center; padding:9px 13px; border-radius:14px; background:var(--surface-2); width:fit-content; }
+  .typing-dot{ width:5px; height:5px; border-radius:50%; background:var(--muted); animation:typingBounce 1.2s infinite ease-in-out; }
+  .typing-dot:nth-child(2){ animation-delay:0.15s; } .typing-dot:nth-child(3){ animation-delay:0.3s; }
+  @keyframes typingBounce{ 0%,60%,100%{ transform:translateY(0); opacity:0.5; } 30%{ transform:translateY(-4px); opacity:1; } }
+  .chat-input-row{ flex:none; display:flex; align-items:center; gap:8px; padding:12px 14px; border-top:1px solid var(--divider); }
+  .chat-input{ flex:1; background:var(--surface-2); border-radius:999px; padding:10px 15px; font-size:13px; color:var(--cream); border:1px solid transparent; transition:border-color 0.2s ease; }
+  .chat-input:focus{ border-color:rgba(232,121,62,0.4); }
+  .chat-input::placeholder{ color:var(--muted-dim); }
+  .send-btn{ width:36px; height:36px; border-radius:50%; background:var(--ember); color:#1a1108; display:flex; align-items:center; justify-content:center; font-size:14px; flex:none; transition:transform 0.15s ease; }
+  .send-btn:active{ transform:scale(0.88); }
+
+  /* ---------- curtains ---------- */
+  .curtain{
+    position:absolute; top:0; bottom:0; width:52%; z-index:100;
+    background:repeating-linear-gradient(90deg, #6E2A11 0px, #6E2A11 16px, #58200C 16px, #58200C 32px);
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.55);
+    transition:transform 0.68s cubic-bezier(.76,0,.24,1);
+  }
+  .curtain::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:16px;
+    background:repeating-radial-gradient(circle at 10px -4px, var(--gold) 0 5px, transparent 6px 20px); opacity:0.85;
+  }
+  .curtain-left{ left:0; transform:translateX(-101%); }
+  .curtain-right{ right:0; transform:translateX(101%); }
+  .curtain-left.closed{ transform:translateX(0); }
+  .curtain-right.closed{ transform:translateX(0); }
+
+  /* ---------- ember particles ---------- */
+  .ember-field{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
+  .ember-particle{
+    position:absolute; bottom:-10px; width:4px; height:4px; border-radius:50%;
+    background:var(--ember); box-shadow:0 0 8px 2px rgba(232,121,62,0.7);
+    opacity:0; animation:emberRise linear infinite;
+  }
+  @keyframes emberRise{
+    0%{ opacity:0; transform:translateY(0) translateX(0); }
+    10%{ opacity:0.8; } 80%{ opacity:0.5; }
+    100%{ opacity:0; transform:translateY(-420px) translateX(14px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-window at-login" id="appWindow">
+
+  <div class="titlebar">
+    <div class="tb-brand"><div class="tb-mark">🔥</div>Hearth</div>
+    <div class="tb-controls">
+      <button class="tb-btn" id="minBtn" aria-label="Minimize"><svg viewBox="0 0 11 1"><rect width="11" height="1" fill="currentColor"/></svg></button>
+      <button class="tb-btn" id="maxBtn" aria-label="Maximize"><svg viewBox="0 0 11 11"><rect x="0.5" y="0.5" width="10" height="10" fill="none" stroke="currentColor"/></svg></button>
+      <button class="tb-btn close" id="closeBtn" aria-label="Close"><svg viewBox="0 0 11 11"><line x1="0" y1="0" x2="11" y2="11" stroke="currentColor"/><line x1="11" y1="0" x2="0" y2="11" stroke="currentColor"/></svg></button>
+    </div>
+  </div>
+
+  <div class="window-body">
+
+    <!-- ===================== SIDEBAR ===================== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-profile">
+        <div class="sb-avatar">M</div>
+        <div class="sb-profile-info">
+          <div class="sb-profile-name">Marshmello</div>
+          <div class="sb-profile-status"><i></i>Online</div>
+        </div>
+      </div>
+      <button class="sb-host-btn" id="hostBtn">▶ <span>Host a movie night</span></button>
+      <nav class="sb-nav">
+        <button class="sb-nav-item active" data-target="home"><span class="sb-icon">🏠</span><span class="sb-label">Home</span></button>
+        <button class="sb-nav-item" data-target="friends"><span class="sb-icon">👥</span><span class="sb-label">Friends</span></button>
+        <button class="sb-nav-item" data-target="profile"><span class="sb-icon">👤</span><span class="sb-label">Profile</span></button>
+      </nav>
+      <div class="sb-spacer"></div>
+      <div class="sb-stats">
+        <div class="sb-stat"><div class="sb-stat-num">24</div><div class="sb-stat-label">Nights</div></div>
+        <div class="sb-stat"><div class="sb-stat-num">4🔥</div><div class="sb-stat-label">Streak</div></div>
+      </div>
+    </aside>
+
+    <!-- ===================== CONTENT ===================== -->
+    <main class="content" id="content">
+
+      <!-- ===================== LOGIN ===================== -->
+      <section class="view active" id="view-login">
+        <div class="login-split">
+          <div class="login-art">
+            <div class="ember-field" id="emberFieldLogin"></div>
+            <div class="login-art-mark">🔥</div>
+            <h1>A private cinema<br><em>for two</em>, on your desktop.</h1>
+            <p>Sign in to pick up where you left off — your rooms, your friends, and tonight's watch party are all one click away.</p>
+            <div class="login-art-sprockets"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+          </div>
+          <div class="login-form-side">
+            <div class="login-card">
+              <div class="login-title">Welcome back</div>
+              <div class="login-sub">Sign in to Hearth</div>
+              <div class="login-field">
+                <label for="username">Username</label>
+                <input id="username" type="text" placeholder="e.g. marshmello" value="marshmello">
+              </div>
+              <div class="login-field">
+                <label for="password">Password</label>
+                <input id="password" type="password" placeholder="••••••••" value="••••••••">
+              </div>
+              <button class="login-submit" id="loginSubmit">Sign in</button>
+              <div class="login-divider"><div></div><span>or</span><div></div></div>
+              <button class="login-ghost">🔗 I have an invite link</button>
+              <div class="login-footer-text">New to Hearth? <a href="#">Create an account</a></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== HOME ===================== -->
+      <section class="view" id="view-home">
+        <div class="view-inner">
+          <div class="home-topbar">
+            <div class="home-greeting">
+              <h1>Good evening, Marshmello</h1>
+              <p>Here's what's happening tonight.</p>
+            </div>
+            <div class="home-actions">
+              <div class="search-input-wrap"><span class="si-icon">🔍</span><input class="search-input" type="text" placeholder="Search friends or movies…"></div>
+              <button class="icon-btn" aria-label="Friend requests">🔔<span class="badge-dot">1</span></button>
+            </div>
+          </div>
+
+          <div class="hero-live" id="jumpBack">
+            <div class="hero-live-glow"></div>
+            <div class="hero-live-text">
+              <div class="hl-label">🎬 Live now</div>
+              <div class="hl-title">Aanya is hosting a movie night</div>
+              <div class="hl-sub">Started 6 minutes ago</div>
+              <span class="hl-btn">▶ Join now</span>
+            </div>
+            <div class="hero-live-preview">
+              <div class="hlp-sprocket top"></div><div class="hlp-sprocket bottom"></div>
+              <div class="hlp-play">▶</div>
+            </div>
+          </div>
+
+          <div class="quick-actions">
+            <button class="qa-card" id="hostQa"><div class="qa-icon">▶</div><div><div class="qa-title">Host</div><div class="qa-sub">Play a file for someone</div></div></button>
+            <button class="qa-card"><div class="qa-icon">🎟</div><div><div class="qa-title">Join code</div><div class="qa-sub">Have a ticket stub?</div></div></button>
+            <button class="qa-card"><div class="qa-icon">➕</div><div><div class="qa-title">Invite</div><div class="qa-sub">Add a friend</div></div></button>
+          </div>
+
+          <div class="home-grid">
+            <div class="home-main">
+              <div class="section-head"><h2>Watched together</h2></div>
+              <div class="poster-grid">
+                <div class="poster-card"><div class="poster-thumb" style="background:linear-gradient(160deg,#4A6B8A,#1E3145);"></div><div class="poster-title">Interstellar</div><div class="poster-meta">with Aanya · 3 days ago</div></div>
+                <div class="poster-card"><div class="poster-thumb" style="background:linear-gradient(160deg,#B77A5A,#5C3623);"></div><div class="poster-title">Amélie</div><div class="poster-meta">with Aanya · 1 week ago</div></div>
+                <div class="poster-card"><div class="poster-thumb" style="background:linear-gradient(160deg,#6E5A8A,#2B2140);"></div><div class="poster-title">Past Lives</div><div class="poster-meta">with Aanya · 2 weeks ago</div></div>
+                <div class="poster-card"><div class="poster-thumb" style="background:linear-gradient(160deg,#7A8F5E,#2C3620);"></div><div class="poster-title">In the Mood for Love</div><div class="poster-meta">with Aanya · 3 weeks ago</div></div>
+              </div>
+            </div>
+            <div class="home-aside">
+              <div class="section-head" style="margin-top:0;"><h2>Friends</h2><button class="see-all" id="seeAllFriends">See all</button></div>
+              <div class="panel-card">
+                <button class="friend-row" id="joinAanyaHome">
+                  <div class="avatar-wrap"><div class="status-ring hosting"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#E39A6B,#8A4A24);">A</div></div></div><div class="live-badge">🎬</div></div>
+                  <div class="friend-info"><div class="friend-name">Aanya</div><div class="friend-meta hosting-text">Hosting now</div></div>
+                  <span class="join-btn">Join</span>
+                </button>
+                <button class="friend-row">
+                  <div class="avatar-wrap"><div class="status-ring online"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#8FC6D9,#3C5F6E);">R</div></div></div></div>
+                  <div class="friend-info"><div class="friend-name">Rohan</div><div class="friend-meta">Online</div></div>
+                </button>
+                <button class="friend-row">
+                  <div class="avatar-wrap"><div class="status-ring offline"><div class="ring-mask"><div class="avatar" style="background:#4A4038; opacity:0.7;">K</div></div></div></div>
+                  <div class="friend-info"><div class="friend-name" style="color:var(--muted);">Kabir</div><div class="friend-meta">Active 2h ago</div></div>
+                </button>
+              </div>
+              <div class="stats-row">
+                <div class="stat-tile"><div class="stat-num">24</div><div class="stat-label">Nights together</div></div>
+                <div class="stat-tile"><div class="stat-num">4 🔥</div><div class="stat-label">Night streak</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== FRIENDS ===================== -->
+      <section class="view" id="view-friends">
+        <div class="view-inner">
+          <div class="friends-header"><h1>Friends</h1></div>
+          <div class="friends-toolbar">
+            <div class="status-row">
+              <button class="status-pill active">● Online</button>
+              <button class="status-pill">Away</button>
+              <button class="status-pill">Appear offline</button>
+            </div>
+            <div class="search-input-wrap"><span class="si-icon">🔍</span><input class="search-input" type="text" placeholder="Search friends…"></div>
+          </div>
+
+          <div class="friends-grid">
+            <div class="friends-list-card">
+              <button class="friend-row" id="joinAanyaFriends">
+                <div class="avatar-wrap"><div class="status-ring hosting"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#E39A6B,#8A4A24);">A</div></div></div><div class="live-badge">🎬</div></div>
+                <div class="friend-info"><div class="friend-name">Aanya</div><div class="friend-meta hosting-text">Hosting now · <span class="nights"><b>18</b> nights together</span></div></div>
+                <span class="join-btn">Join</span>
+              </button>
+              <div class="friend-divider"></div>
+              <button class="friend-row">
+                <div class="avatar-wrap"><div class="status-ring online"><div class="ring-mask"><div class="avatar" style="background:linear-gradient(135deg,#8FC6D9,#3C5F6E);">R</div></div></div></div>
+                <div class="friend-info"><div class="friend-name">Rohan</div><div class="friend-meta">Online · <span class="nights"><b>3</b> nights together</span></div></div>
+              </button>
+              <div class="friend-divider"></div>
+              <button class="friend-row">
+                <div class="avatar-wrap"><div class="status-ring offline"><div class="ring-mask"><div class="avatar" style="background:#4A4038; opacity:0.7;">K</div></div></div></div>
+                <div class="friend-info"><div class="friend-name" style="color:var(--muted);">Kabir</div><div class="friend-meta">Active 2h ago</div></div>
+                <span style="font-size:11px;color:var(--muted-dim);font-weight:700;">Offline</span>
+              </button>
+            </div>
+
+            <div>
+              <div class="request-card">
+                <div class="request-avatar">M</div>
+                <div class="request-text"><b>Meher</b> wants to be friends</div>
+                <div class="request-actions"><button class="req-accept">✓</button><button class="req-decline">✕</button></div>
+              </div>
+              <div class="join-code-card">
+                <h3>🎟 Join with a code</h3>
+                <div class="join-code-row"><input type="text" placeholder="e.g. FILM-8823"><button>Join</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PROFILE ===================== -->
+      <section class="view" id="view-profile">
+        <div class="view-inner">
+          <div class="profile-grid">
+            <div class="profile-card">
+              <div class="profile-avatar">M</div>
+              <div class="profile-name">Marshmello</div>
+              <div class="profile-handle mono">@marshmello</div>
+              <div class="profile-stats">
+                <div class="ps-row"><span class="ps-label">Nights together</span><span class="ps-num">24</span></div>
+                <div class="ps-row"><span class="ps-label">Movies watched</span><span class="ps-num">12</span></div>
+                <div class="ps-row"><span class="ps-label">Friends</span><span class="ps-num">2</span></div>
+              </div>
+            </div>
+            <div class="settings-card">
+              <button class="profile-row"><div class="profile-row-icon">🙈</div><div class="profile-row-label">Privacy & status</div><span class="profile-row-chev">›</span></button>
+              <button class="profile-row"><div class="profile-row-icon">🔔</div><div class="profile-row-label">Notifications</div><span class="profile-row-chev">›</span></button>
+              <button class="profile-row"><div class="profile-row-icon">🎨</div><div class="profile-row-label">Appearance</div><span class="profile-row-chev">›</span></button>
+              <button class="profile-row signout" id="signOutBtn"><div class="profile-row-icon">🚪</div><div class="profile-row-label">Sign out</div><span class="profile-row-chev">›</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== WATCHING ===================== -->
+      <section class="view watch-view" id="view-watching">
+        <div class="watch-video-col">
+          <div class="watch-topbar">
+            <button class="back-btn" id="backBtn">←</button>
+            <div class="watch-title"><div class="who">Aanya's movie night</div><div class="sub">Peer connected · encrypted</div></div>
+            <div class="conn-quality" id="connQuality">
+              <div class="conn-bar" style="height:5px;"></div><div class="conn-bar" style="height:9px;"></div><div class="conn-bar" style="height:13px;"></div>
+            </div>
+            <button class="theater-toggle" id="chatToggle">💬 Hide chat</button>
+          </div>
+          <div class="video-area" id="videoArea">
+            <div class="sprocket-row top"><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div></div>
+            <div class="sprocket-row bottom"><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div><div class="sprocket-hole"></div></div>
+            <div class="host-flag">🎬 Aanya is hosting</div>
+            <button class="center-play" id="centerPlay">▶</button>
+            <div class="reaction-row">
+              <button class="reaction-btn" data-emoji="❤️">❤️</button>
+              <button class="reaction-btn" data-emoji="😂">😂</button>
+              <button class="reaction-btn" data-emoji="😱">😱</button>
+              <button class="reaction-btn" data-emoji="🤫">🤫</button>
+            </div>
+            <div class="video-controls">
+              <div class="scrub-track" id="scrubTrack"><div class="scrub-fill" id="scrubFill"></div><div class="scrub-thumb" id="scrubThumb"></div></div>
+              <div class="time-row"><span class="mono">42:18</span><span class="mono">1:47:03</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-panel" id="chatPanel">
+          <div class="chat-head"><div class="chat-head-title">CHAT</div><div class="chat-head-count mono">2 watching</div></div>
+          <div class="messages" id="messages">
+            <div class="msg"><div class="msg-meta"><span class="msg-name">Aanya</span><span class="msg-time mono">41:02</span></div><div class="msg-bubble">okay okay this is the part I told you about</div></div>
+            <div class="msg own"><div class="msg-meta"><span class="msg-name">You</span><span class="msg-time mono">41:20</span></div><div class="msg-bubble">I'm ready, go</div></div>
+          </div>
+          <div class="chat-input-row">
+            <input class="chat-input" id="chatInput" type="text" placeholder="Say something…">
+            <button class="send-btn" id="sendBtn">➤</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="curtain curtain-left" id="curtainLeft"></div>
+  <div class="curtain curtain-right" id="curtainRight"></div>
+</div>
+
+<div class="hint"><span><b>Tip —</b> this is an interactive prototype: sign in, click a friend to join, hover the video for controls.</span></div>
+
+<script>
+  const appWindow = document.getElementById('appWindow');
+
+  // ---------- ember particles (login) ----------
+  const emberFieldLogin = document.getElementById('emberFieldLogin');
+  for(let i=0;i<14;i++){
+    const p = document.createElement('div');
+    p.className = 'ember-particle';
+    p.style.left = (5 + Math.random()*70) + '%';
+    p.style.animationDuration = (5 + Math.random()*5) + 's';
+    p.style.animationDelay = (Math.random()*6) + 's';
+    emberFieldLogin.appendChild(p);
+  }
+
+  // ---------- window controls ----------
+  document.getElementById('maxBtn').addEventListener('click', ()=> appWindow.classList.toggle('maximized'));
+
+  // ---------- view state ----------
+  const MAIN_VIEWS = ['home','friends','profile'];
+  let lastMain = 'home';
+
+  function showView(id){
+    document.querySelectorAll('.view').forEach(s=> s.classList.remove('active'));
+    document.getElementById('view-' + id).classList.add('active');
+    if(MAIN_VIEWS.includes(id)){
+      lastMain = id;
+      document.querySelectorAll('.sb-nav-item').forEach(b=> b.classList.toggle('active', b.dataset.target === id));
+    }
+  }
+
+  document.querySelectorAll('.sb-nav-item').forEach(btn=>{
+    btn.addEventListener('click', ()=> showView(btn.dataset.target));
+  });
+
+  document.getElementById('loginSubmit').addEventListener('click', ()=>{
+    appWindow.classList.remove('at-login');
+    showView('home');
+  });
+  document.getElementById('signOutBtn').addEventListener('click', ()=>{
+    appWindow.classList.add('at-login');
+    showView('login');
+  });
+  document.getElementById('seeAllFriends').addEventListener('click', ()=> showView('friends'));
+
+  // ---------- curtain transition into / out of a movie night ----------
+  const curtainLeft = document.getElementById('curtainLeft');
+  const curtainRight = document.getElementById('curtainRight');
+  let watchOpenedOnce = false;
+
+  function openMovie(){
+    curtainLeft.classList.add('closed');
+    curtainRight.classList.add('closed');
+    setTimeout(()=>{
+      document.getElementById('view-' + lastMain).classList.remove('active');
+      document.getElementById('view-watching').classList.add('active');
+      appWindow.classList.add('is-watching');
+      if(!watchOpenedOnce){ watchOpenedOnce = true; setTimeout(simulateIncoming, 1400); }
+    }, 620);
+    setTimeout(()=>{
+      curtainLeft.classList.remove('closed');
+      curtainRight.classList.remove('closed');
+    }, 780);
+  }
+
+  function closeMovie(){
+    curtainLeft.classList.add('closed');
+    curtainRight.classList.add('closed');
+    setTimeout(()=>{
+      document.getElementById('view-watching').classList.remove('active');
+      document.getElementById('view-' + lastMain).classList.add('active');
+      appWindow.classList.remove('is-watching');
+    }, 620);
+    setTimeout(()=>{
+      curtainLeft.classList.remove('closed');
+      curtainRight.classList.remove('closed');
+    }, 780);
+  }
+
+  document.getElementById('jumpBack').addEventListener('click', openMovie);
+  document.getElementById('joinAanyaHome').addEventListener('click', openMovie);
+  document.getElementById('joinAanyaFriends').addEventListener('click', openMovie);
+  document.getElementById('hostBtn').addEventListener('click', openMovie);
+  document.getElementById('hostQa').addEventListener('click', openMovie);
+  document.getElementById('backBtn').addEventListener('click', closeMovie);
+
+  // ---------- video controls (hover to reveal, like a desktop player) ----------
+  const videoArea = document.getElementById('videoArea');
+  const centerPlay = document.getElementById('centerPlay');
+  let hideTimer, playing = true;
+  function showControls(){
+    videoArea.classList.add('show-controls');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=> videoArea.classList.remove('show-controls'), 2600);
+  }
+  videoArea.addEventListener('mousemove', showControls);
+  videoArea.addEventListener('mouseleave', ()=>{ clearTimeout(hideTimer); videoArea.classList.remove('show-controls'); });
+  centerPlay.addEventListener('click', (e)=>{
+    e.stopPropagation(); playing = !playing;
+    centerPlay.textContent = playing ? '▶' : '❚❚';
+    showControls();
+  });
+  const scrubTrack = document.getElementById('scrubTrack');
+  const scrubFill = document.getElementById('scrubFill');
+  const scrubThumb = document.getElementById('scrubThumb');
+  scrubTrack.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const rect = scrubTrack.getBoundingClientRect();
+    const pct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    scrubFill.style.width = pct + '%'; scrubThumb.style.left = pct + '%';
+    showControls();
+  });
+
+  // ---------- connection quality flicker ----------
+  const bars = document.querySelectorAll('#connQuality .conn-bar');
+  setInterval(()=>{ bars.forEach((b,i)=>{ const base = 5 + i*4; b.style.height = (base + Math.random()*3) + 'px'; }); }, 2200);
+
+  // ---------- hide / show chat panel (theater mode) ----------
+  const chatPanel = document.getElementById('chatPanel');
+  const chatToggle = document.getElementById('chatToggle');
+  chatToggle.addEventListener('click', ()=>{
+    const hidden = chatPanel.classList.toggle('hidden');
+    chatToggle.textContent = hidden ? '💬 Show chat' : '💬 Hide chat';
+  });
+
+  // ---------- reactions ----------
+  document.querySelectorAll('.reaction-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const span = document.createElement('span');
+      span.className = 'floating-reaction';
+      span.textContent = btn.dataset.emoji;
+      span.style.left = (30 + Math.random()*40) + '%';
+      videoArea.appendChild(span);
+      setTimeout(()=> span.remove(), 1650);
+    });
+  });
+
+  // ---------- chat ----------
+  const messages = document.getElementById('messages');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('sendBtn');
+  function nowTimestamp(){ return '4' + Math.floor(1+Math.random()*9) + ':' + String(Math.floor(Math.random()*59)).padStart(2,'0'); }
+  function addMessage(text, own){
+    const div = document.createElement('div');
+    div.className = 'msg' + (own ? ' own' : '');
+    div.innerHTML = `<div class="msg-meta"><span class="msg-name">${own ? 'You' : 'Aanya'}</span><span class="msg-time mono">${nowTimestamp()}</span></div><div class="msg-bubble"></div>`;
+    div.querySelector('.msg-bubble').textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  }
+  function sendChat(){ const text = chatInput.value.trim(); if(!text) return; addMessage(text, true); chatInput.value = ''; }
+  sendBtn.addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+  function simulateIncoming(){
+    const typing = document.createElement('div');
+    typing.className = 'msg';
+    typing.innerHTML = `<div class="msg-meta"><span class="msg-name">Aanya</span></div><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+    messages.appendChild(typing); messages.scrollTop = messages.scrollHeight;
+    setTimeout(()=>{ typing.remove(); addMessage('shh, this bit is my favourite', false); }, 1500);
+  }
+
+  // ---------- friends status pills ----------
+  document.querySelectorAll('.status-pill').forEach(p=>{
+    p.addEventListener('click', ()=>{
+      p.parentElement.querySelectorAll('.status-pill').forEach(x=>x.classList.remove('active'));
+      p.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

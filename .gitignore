@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-electron/
+release/
+jdk21/
+*.zip
+*.apk
+*.mp4
+*.webp
+scratch/
+.env
