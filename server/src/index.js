@@ -71,6 +71,13 @@ io.on('connection', (socket) => {
     socket.to(room.code).emit('chat:message', msg);
   });
 
+  // ── chat:typing ────────────────────────────────────────────────────────────
+  socket.on('chat:typing', ({ senderName }) => {
+    const room = getRoomBySocket(socket.id);
+    if (!room) return;
+    socket.to(room.code).emit('chat:typing', { senderName });
+  });
+
 
   // ── playback:command ───────────────────────────────────────────────────────
   socket.on('playback:command', (cmd) => {
